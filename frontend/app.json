@@ -9,7 +9,8 @@
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.anonymous.frontend"
     },
     "android": {
       "adaptiveIcon": {
@@ -37,6 +38,12 @@
           "dark": {
             "backgroundColor": "#000000"
           }
+        }
+      ],
+      [
+        "expo-av",
+        {
+          "microphonePermission": "Allow Walkthrough to access your microphone for voice dictation."
         }
       ]
     ],
