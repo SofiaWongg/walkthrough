@@ -86,8 +86,6 @@ def get_property(property_id: str):
             base_checklist = _doc_to_base_checklist(bc_doc)
 
     # Fetch walkthroughs ordered by most recently updated
-    # Note: if Firestore raises an index error here, follow the link in the error
-    # message to create the required composite index (property_id + updated_at).
     wt_docs = (
         db.collection("walkthroughs")
         .where("property_id", "==", property_id)
@@ -103,10 +101,11 @@ def get_property(property_id: str):
     )
 
 
-@router.delete("/{property_id}", status_code=204)
+@router.delete("/{property_id}")
 def delete_property(property_id: str):
     db = get_db()
     doc_ref = db.collection("properties").document(property_id)
     if not doc_ref.get().exists:
         raise HTTPException(status_code=404, detail="Property not found")
     doc_ref.delete()
+    return {"message": f"Property {property_id} deleted successfully"}
