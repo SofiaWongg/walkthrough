@@ -6,6 +6,7 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
 
     firebase_credentials_path: str
+    openai_api_key: str
 
 
 @lru_cache

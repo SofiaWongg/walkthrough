@@ -14,12 +14,17 @@ class Walkthrough(BaseModel):
     property_id: str
     item_list: list[WalkthroughItem] = []
     status: WalkthroughStatus = WalkthroughStatus.active
+    transcript: list[str] = []
     created_at: datetime
     updated_at: datetime
 
 
 class WalkthroughCreate(BaseModel):
     property_id: str
+
+
+class TranscriptChunk(BaseModel):
+    chunk: str
 
 
 class WalkthroughSummary(BaseModel):
