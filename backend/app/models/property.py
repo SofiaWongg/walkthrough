@@ -1,5 +1,7 @@
 from datetime import datetime
 from pydantic import BaseModel
+from app.models.base_checklist import BaseChecklist
+from app.models.walkthrough import WalkthroughSummary
 
 
 class Property(BaseModel):
@@ -12,3 +14,8 @@ class Property(BaseModel):
 
 class PropertyCreate(BaseModel):
     name: str
+
+# This avoids multiple firebase calls
+class PropertyDetail(Property):
+    walkthroughs: list[WalkthroughSummary] = []
+    base_checklist: BaseChecklist | None = None

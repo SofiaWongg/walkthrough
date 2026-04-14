@@ -20,3 +20,10 @@ class Walkthrough(BaseModel):
 
 class WalkthroughCreate(BaseModel):
     property_id: str
+
+
+class WalkthroughSummary(BaseModel):
+    id: str
+    status: WalkthroughStatus
+    created_at: datetime
+    updated_at: datetime
