@@ -48,6 +48,11 @@ def start_session(body: WalkthroughCreate):
     if not prop_doc.exists:
         raise HTTPException(status_code=404, detail="Property not found")
 
+    # Make sure that the property does not have an active session
+    active_session = db.collection("walkthroughs").where("property_id", "==", body.property_id).where("status", "==", WalkthroughStatus.active).limit(1).get()
+    if active_session:
+        raise HTTPException(status_code=409, detail="A session is already active for this property")
+
     prop_data = prop_doc.to_dict()
 
     item_list = []
@@ -88,7 +93,7 @@ def add_transcript_chunk(session_id: str, body: TranscriptChunk) -> Walkthrough:
     if data["status"] == WalkthroughStatus.completed:
         raise HTTPException(status_code=409, detail="Session already completed")
 
-    updated_transcript = data.get("transcript", []) + [body.chunk]
+    updated_transcript = data.get("transcript", []) + [body.model_dump()]
     current_item_list = data.get("item_list", [])
 
     # Build a map of checklist_item_id -> name from the base checklist. This will be passed to the llm 
@@ -130,10 +135,10 @@ def add_transcript_chunk(session_id: str, body: TranscriptChunk) -> Walkthrough:
     return _doc_to_walkthrough(doc_ref.get())
 
 
-def _evaluate_transcript(transcript: list[str], base_items: dict[str, str]) -> dict:
+def _evaluate_transcript(transcript: list[TranscriptChunk], base_items: dict[str, str]) -> dict:
     client = _get_openai_client()
 
-    transcript_text = "\n".join(transcript)
+    transcript_text = "\n".join([chunk["chunk"] for chunk in transcript])
     if base_items:
         items_text = "\n".join(f"- id: {id}, name: {name}" for id, name in base_items.items())
         checklist_section = f"Base checklist:\n{items_text}"

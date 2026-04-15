@@ -110,3 +110,16 @@ def delete_property(property_id: str):
     if not doc_ref.get().exists:
         raise HTTPException(status_code=404, detail="Property not found")
     doc_ref.delete()
+
+
+@router.get("/{property_id}/walkthroughs", response_model=list[WalkthroughSummary])
+def get_walkthroughs(property_id: str):
+    if not property_id:
+        raise HTTPException(status_code=400, detail="Property ID is required")
+    if not isinstance(property_id, str):
+        raise HTTPException(status_code=400, detail="Property ID must be a string")
+    db = get_db()
+    docs = db.collection("walkthroughs").where("property_id", "==", property_id).stream()
+    if not docs:
+        raise HTTPException(status_code=404, detail="No walkthroughs found for this property")
+    return [_doc_to_walkthrough_summary(doc) for doc in docs]
