@@ -10,7 +10,6 @@ class WalkthroughItemStatus(str, Enum):
 class WalkthroughItem(BaseModel):
     id: str
     walkthrough_id: str
-    checklist_item_id: str | None = None
     name: str
     status: WalkthroughItemStatus = WalkthroughItemStatus.unchecked
     notes: str | None = None
@@ -19,5 +18,4 @@ class WalkthroughItem(BaseModel):
 
 class WalkthroughItemCreate(BaseModel):
     name: str
-    checklist_item_id: str | None = None
     is_from_base: bool = False
