@@ -4,6 +4,9 @@ from pydantic import BaseModel
 from app.models.walkthrough_item import WalkthroughItem
 
 
+class TranscriptChunk(BaseModel):
+    chunk: str
+
 class WalkthroughStatus(str, Enum):
     active = "active"
     completed = "completed"
@@ -14,6 +17,7 @@ class Walkthrough(BaseModel):
     property_id: str
     item_list: list[WalkthroughItem] = []
     status: WalkthroughStatus = WalkthroughStatus.active
+    transcript: list[TranscriptChunk] = []
     created_at: datetime
     updated_at: datetime
 
