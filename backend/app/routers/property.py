@@ -2,37 +2,10 @@ from fastapi import APIRouter, HTTPException
 from firebase_admin import firestore
 from app.firebase import get_db
 from app.models.property import Property, PropertyCreate, PropertyDetail
-from app.models.base_checklist import BaseChecklist
-from app.models.checklist_item import ChecklistItem
 from app.models.walkthrough import WalkthroughSummary
+from app.services.property import doc_to_property, doc_to_base_checklist
 
 router = APIRouter(prefix="/properties", tags=["properties"])
-
-
-def _doc_to_property(doc) -> Property:
-    data = doc.to_dict()
-    return Property(
-        id=doc.id,
-        name=data["name"],
-        base_checklist_id=data.get("base_checklist_id"),
-        created_at=data["created_at"],
-        updated_at=data["updated_at"],
-    )
-
-
-def _doc_to_base_checklist(doc) -> BaseChecklist:
-    data = doc.to_dict()
-    items = [
-        ChecklistItem(id=i["id"], checklist_id=doc.id, name=i["name"])
-        for i in data.get("item_list", [])
-    ]
-    return BaseChecklist(
-        id=doc.id,
-        property_id=data["property_id"],
-        item_list=items,
-        created_at=data["created_at"],
-        updated_at=data["updated_at"],
-    )
 
 
 def _doc_to_walkthrough_summary(doc) -> WalkthroughSummary:
@@ -57,14 +30,14 @@ def create_property(body: PropertyCreate):
         "created_at": firestore.SERVER_TIMESTAMP,
         "updated_at": firestore.SERVER_TIMESTAMP,
     })
-    return _doc_to_property(doc_ref.get())
+    return doc_to_property(doc_ref.get())
 
 
 @router.get("/", response_model=list[Property])
 def list_properties():
     db = get_db()
     docs = db.collection("properties").stream()
-    return [_doc_to_property(doc) for doc in docs]
+    return [doc_to_property(doc) for doc in docs]
 
 
 @router.get("/{property_id}", response_model=PropertyDetail)
@@ -75,7 +48,7 @@ def get_property(property_id: str):
     if not doc.exists:
         raise HTTPException(status_code=404, detail="Property not found")
 
-    prop = _doc_to_property(doc)
+    prop = doc_to_property(doc)
     data = doc.to_dict()
 
     # Fetch base checklist if one exists
@@ -83,7 +56,7 @@ def get_property(property_id: str):
     if data.get("base_checklist_id"):
         bc_doc = db.collection("base_checklists").document(data["base_checklist_id"]).get()
         if bc_doc.exists:
-            base_checklist = _doc_to_base_checklist(bc_doc)
+            base_checklist = doc_to_base_checklist(bc_doc)
 
     # Fetch walkthroughs ordered by most recently updated
     wt_docs = (
