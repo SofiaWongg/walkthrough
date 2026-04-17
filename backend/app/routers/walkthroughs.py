@@ -41,17 +41,17 @@ def _doc_to_walkthrough(doc) -> Walkthrough:
 
 
 @router.post("/", response_model=Walkthrough, status_code=201)
-def start_session(body: WalkthroughCreate):
+def start_walkthrough(body: WalkthroughCreate):
     db = get_db()
 
     prop_doc = db.collection("properties").document(body.property_id).get()
     if not prop_doc.exists:
         raise HTTPException(status_code=404, detail="Property not found")
 
-    # Make sure that the property does not have an active session
-    active_session = db.collection("walkthroughs").where("property_id", "==", body.property_id).where("status", "==", WalkthroughStatus.active).limit(1).get()
-    if active_session:
-        raise HTTPException(status_code=409, detail="A session is already active for this property")
+    # Make sure that the property does not have an active walkthrough
+    active_walkthrough = db.collection("walkthroughs").where("property_id", "==", body.property_id).where("status", "==", WalkthroughStatus.active).limit(1).get()
+    if active_walkthrough:
+        raise HTTPException(status_code=409, detail="A walkthrough is already active for this property")
 
     prop_data = prop_doc.to_dict()
 
@@ -80,18 +80,18 @@ def start_session(body: WalkthroughCreate):
     return _doc_to_walkthrough(doc_ref.get())
 
 
-@router.post("/{session_id}/transcript_chunk", response_model=Walkthrough)
-def add_transcript_chunk(session_id: str, body: TranscriptChunk) -> Walkthrough:
+@router.post("/{walkthrough_id}/transcript_chunk", response_model=Walkthrough)
+def add_transcript_chunk(walkthrough_id: str, body: TranscriptChunk) -> Walkthrough:
     db = get_db()
 
-    doc_ref = db.collection("walkthroughs").document(session_id)
+    doc_ref = db.collection("walkthroughs").document(walkthrough_id)
     doc = doc_ref.get()
     if not doc.exists:
-        raise HTTPException(status_code=404, detail="Session not found")
+        raise HTTPException(status_code=404, detail="Walkthrough not found")
 
     data = doc.to_dict()
     if data["status"] == WalkthroughStatus.completed:
-        raise HTTPException(status_code=409, detail="Session already completed")
+        raise HTTPException(status_code=409, detail="Walkthrough already completed")
 
     updated_transcript = data.get("transcript", []) + [body.model_dump()]
     current_item_list = data.get("item_list", [])
@@ -171,18 +171,18 @@ def _evaluate_transcript(transcript: list[TranscriptChunk], base_items: dict[str
     return json.loads(response.choices[0].message.content)
 
 
-@router.post("/{session_id}/validate_checklist", status_code=200)
-def validate_checklist(session_id: str):
+@router.post("/{walkthrough_id}/validate_checklist", status_code=200)
+def validate_checklist(walkthrough_id: str):
     pass
 
 
-@router.post("/{session_id}/end", response_model=Walkthrough)
-def end_session(session_id: str):
+@router.post("/{walkthrough_id}/end", response_model=Walkthrough)
+def end_walkthrough(walkthrough_id: str):
     db = get_db()
 
-    doc_ref = db.collection("walkthroughs").document(session_id)
+    doc_ref = db.collection("walkthroughs").document(walkthrough_id)
     if not doc_ref.get().exists:
-        raise HTTPException(status_code=404, detail="Session not found")
+        raise HTTPException(status_code=404, detail="Walkthrough not found")
 
     doc_ref.update({
         "status": WalkthroughStatus.completed,
