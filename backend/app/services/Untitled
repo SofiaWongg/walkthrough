@@ -1,0 +1,8 @@
+def doc_to_walkthrough_summary(doc) -> WalkthroughSummary:
+    data = doc.to_dict()
+    return WalkthroughSummary(
+        id=doc.id,
+        status=data["status"],
+        created_at=data["created_at"],
+        updated_at=data["updated_at"],
+    )

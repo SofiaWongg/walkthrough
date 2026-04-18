@@ -6,7 +6,8 @@ from openai import OpenAI
 from app.firebase import get_db
 from app.config import get_settings
 from app.models.walkthrough import Walkthrough, WalkthroughCreate, TranscriptChunk, WalkthroughStatus
-from app.models.walkthrough_item import WalkthroughItem, WalkthroughItemStatus
+from app.models.walkthrough_item import WalkthroughItemStatus
+from app.services.walkthrough import save_walkthrough_as_base_checklist, doc_to_walkthrough
 
 router = APIRouter(prefix="/walkthroughs", tags=["walkthroughs"])
 
@@ -15,43 +16,19 @@ def _get_openai_client() -> OpenAI:
     return OpenAI(api_key=get_settings().openai_api_key)
 
 
-def _doc_to_walkthrough(doc) -> Walkthrough:
-    data = doc.to_dict()
-    items = [
-        WalkthroughItem(
-            id=i["id"],
-            walkthrough_id=doc.id,
-            checklist_item_id=i.get("checklist_item_id"),
-            name=i["name"],
-            status=WalkthroughItemStatus(i["status"]),
-            notes=i.get("notes"),
-            is_from_base=i["is_from_base"],
-        )
-        for i in data.get("item_list", [])
-    ]
-    return Walkthrough(
-        id=doc.id,
-        property_id=data["property_id"],
-        item_list=items,
-        status=WalkthroughStatus(data["status"]),
-        transcript=data.get("transcript", []),
-        created_at=data["created_at"],
-        updated_at=data["updated_at"],
-    )
-
 
 @router.post("/", response_model=Walkthrough, status_code=201)
-def start_session(body: WalkthroughCreate):
+def start_walkthrough(body: WalkthroughCreate):
     db = get_db()
 
     prop_doc = db.collection("properties").document(body.property_id).get()
     if not prop_doc.exists:
         raise HTTPException(status_code=404, detail="Property not found")
 
-    # Make sure that the property does not have an active session
-    active_session = db.collection("walkthroughs").where("property_id", "==", body.property_id).where("status", "==", WalkthroughStatus.active).limit(1).get()
-    if active_session:
-        raise HTTPException(status_code=409, detail="A session is already active for this property")
+    # Make sure that the property does not have an active walkthrough
+    active_walkthrough = db.collection("walkthroughs").where("property_id", "==", body.property_id).where("status", "==", WalkthroughStatus.active).limit(1).get()
+    if active_walkthrough:
+        raise HTTPException(status_code=409, detail="A walkthrough is already active for this property")
 
     prop_data = prop_doc.to_dict()
 
@@ -77,21 +54,21 @@ def start_session(body: WalkthroughCreate):
         "created_at": firestore.SERVER_TIMESTAMP,
         "updated_at": firestore.SERVER_TIMESTAMP,
     })
-    return _doc_to_walkthrough(doc_ref.get())
+    return doc_to_walkthrough(doc_ref.get())
 
 
-@router.post("/{session_id}/transcript_chunk", response_model=Walkthrough)
-def add_transcript_chunk(session_id: str, body: TranscriptChunk) -> Walkthrough:
+@router.post("/{walkthrough_id}/transcript_chunk", response_model=Walkthrough)
+def add_transcript_chunk(walkthrough_id: str, body: TranscriptChunk) -> Walkthrough:
     db = get_db()
 
-    doc_ref = db.collection("walkthroughs").document(session_id)
+    doc_ref = db.collection("walkthroughs").document(walkthrough_id)
     doc = doc_ref.get()
     if not doc.exists:
-        raise HTTPException(status_code=404, detail="Session not found")
+        raise HTTPException(status_code=404, detail="Walkthrough not found")
 
     data = doc.to_dict()
     if data["status"] == WalkthroughStatus.completed:
-        raise HTTPException(status_code=409, detail="Session already completed")
+        raise HTTPException(status_code=409, detail="Walkthrough already completed")
 
     updated_transcript = data.get("transcript", []) + [body.model_dump()]
     current_item_list = data.get("item_list", [])
@@ -132,7 +109,7 @@ def add_transcript_chunk(session_id: str, body: TranscriptChunk) -> Walkthrough:
         "item_list": current_item_list,
         "updated_at": firestore.SERVER_TIMESTAMP,
     })
-    return _doc_to_walkthrough(doc_ref.get())
+    return doc_to_walkthrough(doc_ref.get())
 
 
 def _evaluate_transcript(transcript: list[TranscriptChunk], base_items: dict[str, str]) -> dict:
@@ -171,21 +148,29 @@ def _evaluate_transcript(transcript: list[TranscriptChunk], base_items: dict[str
     return json.loads(response.choices[0].message.content)
 
 
-@router.post("/{session_id}/validate_checklist", status_code=200)
-def validate_checklist(session_id: str):
+@router.post("/{walkthrough_id}/validate_checklist", status_code=200)
+def validate_checklist(walkthrough_id: str):
     pass
 
 
-@router.post("/{session_id}/end", response_model=Walkthrough)
-def end_session(session_id: str):
+# This endpoint takes in a walkthrough object with the users final edits
+@router.post("/{walkthrough_id}/end", response_model=Walkthrough)       
+def end_walkthrough(walkthrough_id: str, walkthrough: Walkthrough):
     db = get_db()
 
-    doc_ref = db.collection("walkthroughs").document(session_id)
+    doc_ref = db.collection("walkthroughs").document(walkthrough_id)
     if not doc_ref.get().exists:
-        raise HTTPException(status_code=404, detail="Session not found")
+        raise HTTPException(status_code=404, detail="Walkthrough not found")
 
     doc_ref.update({
         "status": WalkthroughStatus.completed,
         "updated_at": firestore.SERVER_TIMESTAMP,
+        "item_list": [item.model_dump() for item in walkthrough.item_list],
     })
-    return _doc_to_walkthrough(doc_ref.get())
+
+    # If user has no base checklist add this walkthrough as the base checklist
+    property_doc = db.collection("properties").document(walkthrough.property_id).get()
+    if property_doc.exists and not property_doc.to_dict().get("base_checklist_id"):
+        save_walkthrough_as_base_checklist(walkthrough)
+
+    return doc_to_walkthrough(doc_ref.get())
