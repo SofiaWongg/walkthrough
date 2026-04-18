@@ -57,6 +57,15 @@ def start_walkthrough(body: WalkthroughCreate):
     return doc_to_walkthrough(doc_ref.get())
 
 
+@router.get("/{walkthrough_id}", response_model=Walkthrough)
+def get_walkthrough(walkthrough_id: str) -> Walkthrough:
+    db = get_db()
+    doc = db.collection("walkthroughs").document(walkthrough_id).get()
+    if not doc.exists:
+        raise HTTPException(status_code=404, detail="Walkthrough not found")
+    return doc_to_walkthrough(doc)
+
+
 @router.post("/{walkthrough_id}/transcript_chunk", response_model=Walkthrough)
 def add_transcript_chunk(walkthrough_id: str, body: TranscriptChunk) -> Walkthrough:
     db = get_db()

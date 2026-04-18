@@ -50,12 +50,17 @@ def doc_to_walkthrough(doc) -> Walkthrough:
         )
         for i in data.get("item_list", [])
     ]
+    raw_transcript = data.get("transcript", [])
+    transcript = [
+        c if isinstance(c, dict) else {"chunk": c}
+        for c in raw_transcript
+    ]
     return Walkthrough(
         id=doc.id,
         property_id=data["property_id"],
         item_list=items,
         status=WalkthroughStatus(data["status"]),
-        transcript=data.get("transcript", []),
+        transcript=transcript,
         created_at=data["created_at"],
         updated_at=data["updated_at"],
     )
