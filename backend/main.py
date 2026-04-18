@@ -1,7 +1,7 @@
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from app.firebase import initialize_firebase, get_db
-from app.routers import property, walkthrough
+from app.routers import property, walkthrough, base_checklist
 
 
 @asynccontextmanager
@@ -14,6 +14,7 @@ app = FastAPI(title="Walkthrough App API", version="1.0.0", lifespan=lifespan)
 
 app.include_router(property.router, prefix="/api")
 app.include_router(walkthrough.router, prefix="/api")
+app.include_router(base_checklist.router, prefix="/api")
 
 
 @app.get("/")
