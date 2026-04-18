@@ -10,6 +10,7 @@ class WalkthroughItemStatus(str, Enum):
 class WalkthroughItem(BaseModel):
     id: str
     walkthrough_id: str
+    checklist_item_id: str | None = None # this helps us look at the history of an item 
     name: str
     status: WalkthroughItemStatus = WalkthroughItemStatus.unchecked
     notes: str | None = None
