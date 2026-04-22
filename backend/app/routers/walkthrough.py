@@ -10,6 +10,7 @@ from app.models.walkthrough_item import WalkthroughItemStatus
 from app.services.walkthrough import save_walkthrough_as_base_checklist, doc_to_walkthrough
 
 router = APIRouter(prefix="/walkthroughs", tags=["walkthroughs"])
+MODEL = "gpt-5.4-mini"
 
 
 def _get_openai_client() -> OpenAI:
@@ -93,11 +94,13 @@ def add_transcript_chunk(walkthrough_id: str, body: TranscriptChunk) -> Walkthro
 
     llm_result = _evaluate_transcript(updated_transcript, base_items_map)
 
-    # Update statuses for base checklist items
-    base_status_updates = {r["id"]: r["status"] for r in llm_result.get("base_items", [])}
+    # Update statuses and notes for base checklist items
+    base_updates = {r["id"]: r for r in llm_result.get("base_items", [])}
     for item in current_item_list:
-        if item.get("checklist_item_id") in base_status_updates:
-            item["status"] = base_status_updates[item["checklist_item_id"]]
+        if item.get("checklist_item_id") in base_updates:
+            update = base_updates[item["checklist_item_id"]]
+            item["status"] = update["status"]
+            item["notes"] = update.get("notes")
 
     # Upsert action items by name (case-insensitive) to avoid duplicates across chunks
     existing_names = {i["name"].lower() for i in current_item_list}
@@ -130,27 +133,71 @@ def _evaluate_transcript(transcript: list[TranscriptChunk], base_items: dict[str
         checklist_section = f"Base checklist:\n{items_text}"
     else:
         checklist_section = "Base checklist: none"
-
+    
+    # Step 1: Extract items from transcript 
     response = client.chat.completions.create(
-        model="gpt-4o-mini",
+        model=MODEL,
         response_format={"type": "json_object"},
         messages=[
             {
                 "role": "system",
-                "content": (
-                    "You are a property inspection assistant. Given an inspector's transcript (and optionally a base checklist), "
-                    "extract all observed items and their action items.\n"
-                    "Return a JSON object with:\n"
-                    "- base_items: array of {\"id\": \"<checklist_item_id>\", \"status\": \"checked\" or \"unchecked\"} "
-                    "for items in the base checklist. Empty array if no base checklist was provided.\n"
-                    "- action_items: array of {\"name\": \"<item name>\", \"todo\": \"<short action description or null if no issue>\"} "
-                    "for every item observed in the transcript that is NOT already in the base checklist. "
-                    "Include items with no issues (set todo to null). All action items are considered checked."
-                ),
+                "content":
+                    '''You are a property inspector. Given a transcript you need to sort out items have gotten inspected and their action items if any. If there are no action items you should just use the word "checked"
+
+                        Example:
+                        Transcript: "OK Checking the windows here they look good the fridge has a little dent let's fix that the deck looks good the lights needle new lightbulb and the washer dryer needs to be replaced also the AC unit unit needs a new air filter"
+
+                        Would result in:
+                        Windows: checked
+                        Fridge: take care of little dent
+                        Deck: checked
+                        Lights: need new lightbulb
+                        Washer/Dryer: replace
+                        AC: new air filter
+
+                        Return the results in a JSON object with the following format:
+                        {
+                            "windows": "checked",
+                            "fridge": "take care of little dent",
+                            "deck": "checked",
+                            "lights": "need new lightbulb",
+                            "washer/dryer": "replace",
+                            "ac": "new air filter"
+                        }
+                        ''',
             },
             {
                 "role": "user",
-                "content": f"{checklist_section}\n\nTranscript:\n{transcript_text}",
+                "content": f"Transcript:\n{transcript_text}",
+            },
+        ],
+    )
+
+    transcript_items = json.loads(response.choices[0].message.content)
+
+    # Step 2: compare items to base and return structured result
+    response = client.chat.completions.create(
+        model=MODEL,
+        response_format={"type": "json_object"},
+        messages=[
+            {
+                "role": "system",
+                "content": f'''{checklist_section}
+
+                    You will be given inspected items from a transcript. Match them against the base checklist and return a JSON object with this exact format:
+                    {{
+                        "base_items": [{{"id": "<checklist_item_id>", "status": "checked or unchecked", "notes": "<action description or null>"}}],
+                        "action_items": [{{"name": "<item name>", "todo": "<action description or null>"}}]
+                    }}
+
+                    Rules:
+                    - base_items: include ALL base checklist items using their exact id. Use semantic/fuzzy matching — transcript items like "ac", "air conditioning", or "air conditioning unit" should all match a base item named "ac unit". Set status to "checked" if found in transcript items, otherwise "unchecked". Set notes to the action description if there is one, otherwise null.
+                    - action_items: only include transcript items that do NOT semantically match any base checklist item. Set todo to the action description, or null if the item was just checked.
+                    ''',
+            },
+            {
+                "role": "user",
+                "content": f"Transcript items:\n{json.dumps(transcript_items, indent=2)}",
             },
         ],
     )
