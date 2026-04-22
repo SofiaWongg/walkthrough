@@ -85,6 +85,21 @@ def delete_property(property_id: str):
     return {"message": f"Property {property_id} deleted successfully"}
 
 
+@router.get("/{property_id}/base_checklist", response_model=BaseChecklist)
+def get_base_checklist(property_id: str):
+    db = get_db()
+    prop_doc = db.collection("properties").document(property_id).get()
+    if not prop_doc.exists:
+        raise HTTPException(status_code=404, detail="Property not found")
+    bc_id = prop_doc.to_dict().get("base_checklist_id")
+    if not bc_id:
+        raise HTTPException(status_code=404, detail="No base checklist for this property")
+    bc_doc = db.collection("base_checklists").document(bc_id).get()
+    if not bc_doc.exists:
+        raise HTTPException(status_code=404, detail="Base checklist not found")
+    return doc_to_base_checklist(bc_doc)
+
+
 @router.put("/{property_id}/base_checklist", response_model=BaseChecklist)
 def upsert_base_checklist(property_id: str, items: list[ChecklistItemCreate]):
     db = get_db()

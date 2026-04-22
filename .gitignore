@@ -1,3 +1,5 @@
 node_modules/
 frontend/dist/
 .env
+.vite/
+.DS_Store
