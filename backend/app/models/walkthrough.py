@@ -10,6 +10,7 @@ class TranscriptChunk(BaseModel):
 class WalkthroughStatus(str, Enum):
     active = "active"
     completed = "completed"
+    discarded = "discarded"
 
 
 class Walkthrough(BaseModel):
