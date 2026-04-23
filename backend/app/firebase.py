@@ -1,3 +1,4 @@
+import json
 import firebase_admin
 from firebase_admin import credentials, firestore
 from google.cloud.firestore import Client
@@ -9,7 +10,12 @@ _db: Client | None = None
 def initialize_firebase() -> None:
     settings = get_settings()
     if not firebase_admin._apps:
-        cred = credentials.Certificate(settings.firebase_credentials_path)
+        if settings.firebase_credentials_json:
+            cred = credentials.Certificate(json.loads(settings.firebase_credentials_json))
+        elif settings.firebase_credentials_path:
+            cred = credentials.Certificate(settings.firebase_credentials_path)
+        else:
+            raise ValueError("Either FIREBASE_CREDENTIALS_JSON or FIREBASE_CREDENTIALS_PATH must be set")
         firebase_admin.initialize_app(cred)
     global _db
     _db = firestore.client()
