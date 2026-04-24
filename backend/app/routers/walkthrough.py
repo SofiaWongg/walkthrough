@@ -79,6 +79,8 @@ def add_transcript_chunk(walkthrough_id: str, body: TranscriptChunk) -> Walkthro
     data = doc.to_dict()
     if data["status"] == WalkthroughStatus.completed:
         raise HTTPException(status_code=409, detail="Walkthrough already completed")
+    if data["status"] == WalkthroughStatus.cancelled:
+        raise HTTPException(status_code=409, detail="Walkthrough has been cancelled")
 
     updated_transcript = data.get("transcript", []) + [body.model_dump()]
     current_item_list = data.get("item_list", [])
@@ -209,14 +211,37 @@ def validate_checklist(walkthrough_id: str):
     pass
 
 
+@router.post("/{walkthrough_id}/cancel", response_model=Walkthrough)
+def cancel_walkthrough(walkthrough_id: str):
+    db = get_db()
+
+    doc_ref = db.collection("walkthroughs").document(walkthrough_id)
+    doc = doc_ref.get()
+    if not doc.exists:
+        raise HTTPException(status_code=404, detail="Walkthrough not found")
+
+    if doc.to_dict()["status"] != WalkthroughStatus.active:
+        raise HTTPException(status_code=409, detail="Only active walkthroughs can be cancelled")
+
+    doc_ref.update({
+        "status": WalkthroughStatus.cancelled,
+        "updated_at": firestore.SERVER_TIMESTAMP,
+    })
+    return doc_to_walkthrough(doc_ref.get())
+
+
 # This endpoint takes in a walkthrough object with the users final edits
-@router.post("/{walkthrough_id}/end", response_model=Walkthrough)       
+@router.post("/{walkthrough_id}/end", response_model=Walkthrough)
 def end_walkthrough(walkthrough_id: str, walkthrough: Walkthrough):
     db = get_db()
 
     doc_ref = db.collection("walkthroughs").document(walkthrough_id)
-    if not doc_ref.get().exists:
+    doc = doc_ref.get()
+    if not doc.exists:
         raise HTTPException(status_code=404, detail="Walkthrough not found")
+
+    if doc.to_dict()["status"] == WalkthroughStatus.cancelled:
+        raise HTTPException(status_code=409, detail="Walkthrough has been cancelled")
 
     doc_ref.update({
         "status": WalkthroughStatus.completed,

@@ -1,11 +1,11 @@
 import uuid
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Query
 from firebase_admin import firestore
 from app.firebase import get_db
 from app.models.base_checklist import BaseChecklist
 from app.models.checklist_item import ChecklistItemCreate
 from app.models.property import Property, PropertyCreate, PropertyDetail
-from app.models.walkthrough import WalkthroughSummary
+from app.models.walkthrough import WalkthroughSummary, WalkthroughStatus
 from app.services.property import doc_to_property, doc_to_base_checklist
 
 router = APIRouter(prefix="/properties", tags=["properties"])
@@ -44,7 +44,7 @@ def list_properties():
 
 
 @router.get("/{property_id}", response_model=PropertyDetail)
-def get_property(property_id: str):
+def get_property(property_id: str, include_cancelled: bool = Query(default=False)):
     db = get_db()
 
     doc = db.collection("properties").document(property_id).get()
@@ -60,12 +60,14 @@ def get_property(property_id: str):
         if bc_doc.exists:
             base_checklist = doc_to_base_checklist(bc_doc)
 
-    wt_docs = (
+    query = (
         db.collection("walkthroughs")
         .where("property_id", "==", property_id)
         .order_by("updated_at", direction=firestore.Query.DESCENDING)
-        .stream()
     )
+    if not include_cancelled:
+        query = query.where("status", "in", [WalkthroughStatus.active, WalkthroughStatus.completed])
+    wt_docs = query.stream()
     walkthroughs = [_doc_to_walkthrough_summary(doc) for doc in wt_docs]
 
     return PropertyDetail(
@@ -128,9 +130,11 @@ def upsert_base_checklist(property_id: str, items: list[ChecklistItemCreate]):
 
 
 @router.get("/{property_id}/walkthroughs", response_model=list[WalkthroughSummary])
-def get_walkthroughs(property_id: str):
+def get_walkthroughs(property_id: str, include_cancelled: bool = Query(default=False)):
     if not property_id:
         raise HTTPException(status_code=400, detail="Property ID is required")
     db = get_db()
-    docs = db.collection("walkthroughs").where("property_id", "==", property_id).stream()
-    return [_doc_to_walkthrough_summary(doc) for doc in docs]
+    query = db.collection("walkthroughs").where("property_id", "==", property_id)
+    if not include_cancelled:
+        query = query.where("status", "in", [WalkthroughStatus.active, WalkthroughStatus.completed])
+    return [_doc_to_walkthrough_summary(doc) for doc in query.stream()]
