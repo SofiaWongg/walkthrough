@@ -79,7 +79,7 @@ def add_transcript_chunk(walkthrough_id: str, body: TranscriptChunk) -> Walkthro
     data = doc.to_dict()
     if data["status"] == WalkthroughStatus.completed:
         raise HTTPException(status_code=409, detail="Walkthrough already completed")
-    if data["status"] == WalkthroughStatus.discarded:
+    if data["status"] == WalkthroughStatus.cancelled:
         raise HTTPException(status_code=409, detail="Walkthrough has been cancelled")
 
     updated_transcript = data.get("transcript", []) + [body.model_dump()]
@@ -224,7 +224,7 @@ def cancel_walkthrough(walkthrough_id: str):
         raise HTTPException(status_code=409, detail="Only active walkthroughs can be cancelled")
 
     doc_ref.update({
-        "status": WalkthroughStatus.discarded,
+        "status": WalkthroughStatus.cancelled,
         "updated_at": firestore.SERVER_TIMESTAMP,
     })
     return doc_to_walkthrough(doc_ref.get())
@@ -240,7 +240,7 @@ def end_walkthrough(walkthrough_id: str, walkthrough: Walkthrough):
     if not doc.exists:
         raise HTTPException(status_code=404, detail="Walkthrough not found")
 
-    if doc.to_dict()["status"] == WalkthroughStatus.discarded:
+    if doc.to_dict()["status"] == WalkthroughStatus.cancelled:
         raise HTTPException(status_code=409, detail="Walkthrough has been cancelled")
 
     doc_ref.update({
