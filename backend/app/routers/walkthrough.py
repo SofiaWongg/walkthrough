@@ -8,6 +8,7 @@ from app.config import get_settings
 from app.models.walkthrough import Walkthrough, WalkthroughCreate, TranscriptChunk, WalkthroughStatus
 from app.models.walkthrough_item import WalkthroughItemStatus
 from app.services.walkthrough import save_walkthrough_as_base_checklist, doc_to_walkthrough
+from app.services.todo_item import create_todos_from_walkthrough
 
 router = APIRouter(prefix="/walkthroughs", tags=["walkthroughs"])
 MODEL = "gpt-5.4-mini"
@@ -144,7 +145,7 @@ def _evaluate_transcript(transcript: list[TranscriptChunk], base_items: dict[str
             {
                 "role": "system",
                 "content":
-                    '''You are a property inspector. Given a transcript you need to sort out items have gotten inspected and their action items if any. If there are no action items you should just use the word "checked"
+                    '''You are a property inspector. Given a transcript you need to sort out items have gotten inspected and their action items if any. If there are no action items you should just use the word "checked". If there are multiple action items for the same thing, list them comma-separated.
 
                         Example:
                         Transcript: "OK Checking the windows here they look good the fridge has a little dent let's fix that the deck looks good the lights needle new lightbulb and the washer dryer needs to be replaced also the AC unit unit needs a new air filter"
@@ -156,6 +157,13 @@ def _evaluate_transcript(transcript: list[TranscriptChunk], base_items: dict[str
                         Lights: need new lightbulb
                         Washer/Dryer: replace
                         AC: new air filter
+
+                        Example with multiple actions:
+                        Transcript: "The windows need to be repainted and also need insulation. The deck needs re-staining and some boards replaced."
+
+                        Would result in:
+                        Windows: re-paint, insulate
+                        Deck: re-stain, replace boards
 
                         Return the results in a JSON object with the following format:
                         {
@@ -188,13 +196,13 @@ def _evaluate_transcript(transcript: list[TranscriptChunk], base_items: dict[str
 
                     You will be given inspected items from a transcript. Match them against the base checklist and return a JSON object with this exact format:
                     {{
-                        "base_items": [{{"id": "<checklist_item_id>", "status": "checked or unchecked", "notes": "<action description or null>"}}],
-                        "action_items": [{{"name": "<item name>", "todo": "<action description or null>"}}]
+                        "base_items": [{{"id": "<checklist_item_id>", "status": "checked or unchecked", "notes": "<comma-separated action descriptions or null>"}}],
+                        "action_items": [{{"name": "<item name>", "todo": "<comma-separated action descriptions or null>"}}]
                     }}
 
                     Rules:
-                    - base_items: include ALL base checklist items using their exact id. Use semantic/fuzzy matching — transcript items like "ac", "air conditioning", or "air conditioning unit" should all match a base item named "ac unit". Set status to "checked" if found in transcript items, otherwise "unchecked". Set notes to the action description if there is one, otherwise null.
-                    - action_items: only include transcript items that do NOT semantically match any base checklist item. Set todo to the action description, or null if the item was just checked.
+                    - base_items: include ALL base checklist items using their exact id. Use semantic/fuzzy matching — transcript items like "ac", "air conditioning", or "air conditioning unit" should all match a base item named "ac unit". Set status to "checked" if found in transcript items, otherwise "unchecked". Set notes to a comma-separated list of action descriptions if there are any, otherwise null.
+                    - action_items: only include transcript items that do NOT semantically match any base checklist item. Set todo to a comma-separated list of action descriptions, or null if the item was just checked.
                     ''',
             },
             {
@@ -253,5 +261,7 @@ def end_walkthrough(walkthrough_id: str, walkthrough: Walkthrough):
     property_doc = db.collection("properties").document(walkthrough.property_id).get()
     if property_doc.exists and not property_doc.to_dict().get("base_checklist_id"):
         save_walkthrough_as_base_checklist(walkthrough)
+
+    create_todos_from_walkthrough(walkthrough_id, db)
 
     return doc_to_walkthrough(doc_ref.get())
