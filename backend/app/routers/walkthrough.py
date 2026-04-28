@@ -79,7 +79,7 @@ def add_transcript_chunk(walkthrough_id: str, body: TranscriptChunk) -> Walkthro
     current_images = data.get("images", {})
 
     # Describe any images uploaded since the last chunk, using surrounding transcript as context
-    current_images = _process_unprocessed_images(current_images, updated_transcript)
+    current_images = _enrich_new_images(current_images, updated_transcript)
 
     # Build a map of checklist_item_id -> name from the base checklist
     base_items_map: dict[str, str] = {}
@@ -119,6 +119,7 @@ def add_transcript_chunk(walkthrough_id: str, body: TranscriptChunk) -> Walkthro
             existing_names.add(action_item["name"].lower())
 
     # Link any unlinked images to the best-matching walkthrough item
+    # Note that current approach assumes all images are related to some item/ are not unmatched
     image_links = _link_images_to_items(current_images, current_item_list)
     for img_id, item_id in image_links.items():
         if img_id in current_images:
@@ -167,8 +168,8 @@ async def upload_image(
     return doc_to_walkthrough(doc_ref.get())
 
 
-def _process_unprocessed_images(images: dict[str, dict], transcript: list[dict]) -> dict[str, dict]:
-    """Describe any images that haven't been processed yet, using surrounding transcript chunks as context."""
+def _enrich_new_images(images: dict[str, dict], transcript: list[dict]) -> dict[str, dict]:
+    """Describe any images that haven't been enriched yet, using surrounding transcript chunks as context."""
     for img in images.values():
         if img.get("vision_description"):
             continue
@@ -396,7 +397,7 @@ def end_walkthrough(walkthrough_id: str, walkthrough: Walkthrough):
     doc_ref, data = get_active_walkthrough(walkthrough_id)
     db = get_db()
 
-    current_images = _process_unprocessed_images(
+    current_images = _enrich_new_images(
         data.get("images", {}),
         data.get("transcript", []),
     )
