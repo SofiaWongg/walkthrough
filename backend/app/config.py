@@ -6,6 +6,7 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
     firebase_credentials_path: str | None = None
     firebase_credentials_json: str | None = None
+    firebase_storage_bucket: str | None = None
     openai_api_key: str
 
 

@@ -3,3 +3,4 @@ frontend/dist/
 .env
 .vite/
 .DS_Store
+.claude/

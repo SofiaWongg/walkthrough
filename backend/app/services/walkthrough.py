@@ -1,10 +1,25 @@
 import uuid
 from fastapi import HTTPException
+from google.cloud.firestore import DocumentReference
 from app.firebase import get_db
-from app.models.walkthrough import Walkthrough, WalkthroughStatus
+from app.models.walkthrough import Walkthrough, WalkthroughImage, WalkthroughStatus
 from app.models.walkthrough_item import WalkthroughItem, WalkthroughItemStatus
 from app.models.checklist_item import ChecklistItem
 from app.models.base_checklist import BaseChecklist
+
+
+def get_active_walkthrough(walkthrough_id: str) -> tuple[DocumentReference, dict]:
+    db = get_db()
+    doc_ref = db.collection("walkthroughs").document(walkthrough_id)
+    doc = doc_ref.get()
+    if not doc.exists:
+        raise HTTPException(status_code=404, detail="Walkthrough not found")
+    data = doc.to_dict()
+    if data["status"] == WalkthroughStatus.completed:
+        raise HTTPException(status_code=409, detail="Walkthrough already completed")
+    if data["status"] == WalkthroughStatus.cancelled:
+        raise HTTPException(status_code=409, detail="Walkthrough has been cancelled")
+    return doc_ref, data
 
 
 def save_walkthrough_as_base_checklist(walkthrough: Walkthrough):
@@ -55,10 +70,15 @@ def doc_to_walkthrough(doc) -> Walkthrough:
         c if isinstance(c, dict) else {"chunk": c}
         for c in raw_transcript
     ]
+    images = {
+        img_id: WalkthroughImage(**img_data)
+        for img_id, img_data in data.get("images", {}).items()
+    }
     return Walkthrough(
         id=doc.id,
         property_id=data["property_id"],
         item_list=items,
+        images=images,
         status=WalkthroughStatus(data["status"]),
         transcript=transcript,
         created_at=data["created_at"],
