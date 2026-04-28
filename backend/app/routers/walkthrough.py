@@ -153,7 +153,7 @@ async def upload_image(
 
     image_obj = WalkthroughImage(
         id=image_id,
-        timestamp_taken=datetime.fromisoformat(timestamp_taken),
+        timestamp_taken=datetime.fromisoformat(timestamp_taken.replace('Z', '+00:00')),
         transcript_index=len(transcript),
         storage_url=blob.public_url,
     )

@@ -24,6 +24,13 @@ export default function WalkthroughPage() {
   const [error, setError] = useState<string | null>(null);
   const [isEnding, setIsEnding] = useState(false);
   const [speechSupported, setSpeechSupported] = useState(true);
+  const [cameraOpen, setCameraOpen] = useState(false);
+  const [cameraFile, setCameraFile] = useState<File | null>(null);
+  const [cameraPreviewUrl, setCameraPreviewUrl] = useState<string | null>(null);
+  const [isUploadingImage, setIsUploadingImage] = useState(false);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
 
   const walkthroughRef = useRef<Walkthrough | null>(walkthrough);
   const isSendingRef = useRef(false);
@@ -208,6 +215,72 @@ export default function WalkthroughPage() {
     setEditableItems((items) =>
       items.map((item) => (item.id === id ? { ...item, ...updates } : item))
     );
+  };
+
+  const stopStream = () => {
+    streamRef.current?.getTracks().forEach((t) => t.stop());
+    streamRef.current = null;
+  };
+
+  const handleCameraClick = async () => {
+    setCameraOpen(true);
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: 'environment' },
+      });
+      streamRef.current = stream;
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+      }
+    } catch {
+      setError('Camera access denied. Please allow camera permissions and try again.');
+      setCameraOpen(false);
+    }
+  };
+
+  const handleCapture = () => {
+    const video = videoRef.current;
+    const canvas = canvasRef.current;
+    if (!video || !canvas) return;
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    canvas.getContext('2d')?.drawImage(video, 0, 0);
+    canvas.toBlob((blob) => {
+      if (!blob) return;
+      const file = new File([blob], 'photo.jpg', { type: 'image/jpeg' });
+      setCameraFile(file);
+      setCameraPreviewUrl(URL.createObjectURL(file));
+      stopStream();
+      setCameraOpen(false);
+    }, 'image/jpeg', 0.92);
+  };
+
+  const handleCameraClose = () => {
+    stopStream();
+    setCameraOpen(false);
+  };
+
+  const handleImageConfirm = async () => {
+    if (!cameraFile || !walkthrough) return;
+    setIsUploadingImage(true);
+    try {
+      const updated = await api.uploadImage(walkthrough.id, cameraFile);
+      setWalkthrough(updated);
+    } catch (e) {
+      setError(`Failed to upload image: ${(e as Error).message}`);
+    } finally {
+      setIsUploadingImage(false);
+      if (cameraPreviewUrl) URL.revokeObjectURL(cameraPreviewUrl);
+      setCameraFile(null);
+      setCameraPreviewUrl(null);
+    }
+  };
+
+  const handleRetake = () => {
+    if (cameraPreviewUrl) URL.revokeObjectURL(cameraPreviewUrl);
+    setCameraFile(null);
+    setCameraPreviewUrl(null);
+    void handleCameraClick();
   };
 
   if (!walkthrough) return null;
@@ -415,13 +488,37 @@ export default function WalkthroughPage() {
           borderTop: '1px solid var(--border)',
           background: 'var(--card)',
           flexShrink: 0,
+          display: 'flex',
+          gap: 10,
         }}
       >
+        <button
+          onClick={handleCameraClick}
+          disabled={isSending || endStep !== 0}
+          title="Take photo"
+          style={{
+            padding: '13px 16px',
+            background: 'var(--card)',
+            border: '1px solid var(--border)',
+            borderRadius: 'var(--radius)',
+            cursor: isSending || endStep !== 0 ? 'not-allowed' : 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            flexShrink: 0,
+            opacity: isSending || endStep !== 0 ? 0.5 : 1,
+          }}
+        >
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
+            <circle cx="12" cy="13" r="4"/>
+          </svg>
+        </button>
         <button
           onClick={handleEndClick}
           disabled={isSending}
           style={{
-            width: '100%',
+            flex: 1,
             padding: 13,
             background: isSending ? '#fca5a5' : 'var(--red)',
             color: 'white',
@@ -435,6 +532,101 @@ export default function WalkthroughPage() {
           {isSending ? 'Processing…' : 'End Walkthrough'}
         </button>
       </div>
+
+      {/* Hidden canvas for capturing frames */}
+      <canvas ref={canvasRef} style={{ display: 'none' }} />
+
+      {/* Camera viewfinder */}
+      {cameraOpen && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: '#000',
+            zIndex: 200,
+            display: 'flex',
+            flexDirection: 'column',
+          }}
+        >
+          <video
+            ref={videoRef}
+            autoPlay
+            playsInline
+            style={{ flex: 1, width: '100%', objectFit: 'cover' }}
+          />
+          <div
+            style={{
+              padding: '24px 32px',
+              display: 'flex',
+              justifyContent: 'center',
+              alignItems: 'center',
+              gap: 40,
+              background: '#000',
+            }}
+          >
+            <button
+              onClick={handleCameraClose}
+              style={{
+                background: 'rgba(255,255,255,0.15)',
+                border: 'none',
+                borderRadius: '50%',
+                width: 48,
+                height: 48,
+                color: 'white',
+                fontSize: 20,
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+            >
+              ✕
+            </button>
+            <button
+              onClick={handleCapture}
+              style={{
+                width: 68,
+                height: 68,
+                borderRadius: '50%',
+                background: 'white',
+                border: '4px solid rgba(255,255,255,0.5)',
+                cursor: 'pointer',
+                outline: '3px solid white',
+              }}
+            />
+          </div>
+        </div>
+      )}
+
+      {/* Camera preview */}
+      {cameraPreviewUrl && (
+        <BottomSheet>
+          <h2 style={{ fontSize: 18, fontWeight: 700, marginBottom: 16 }}>Use this photo?</h2>
+          <img
+            src={cameraPreviewUrl}
+            alt="Preview"
+            style={{
+              width: '100%',
+              borderRadius: 'var(--radius)',
+              marginBottom: 20,
+              maxHeight: 320,
+              objectFit: 'cover',
+            }}
+          />
+          <div style={{ display: 'flex', gap: 10 }}>
+            <button onClick={handleRetake} style={{ ...outlineBtn, flex: 1 }}>
+              Retake
+            </button>
+            <button
+              onClick={handleImageConfirm}
+              disabled={isUploadingImage}
+              style={{ ...primaryBtn, flex: 1, opacity: isUploadingImage ? 0.7 : 1, cursor: isUploadingImage ? 'not-allowed' : 'pointer' }}
+            >
+              {isUploadingImage ? 'Uploading…' : '✓'}
+            </button>
+          </div>
+        </BottomSheet>
+      )}
 
       {/* Step 1: Review unchecked base items */}
       {endStep === 1 && (

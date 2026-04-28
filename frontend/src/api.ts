@@ -38,4 +38,19 @@ export const api = {
       method: 'POST',
       body: JSON.stringify(walkthrough),
     }),
+
+  uploadImage: async (walkthrough_id: string, image: File): Promise<Walkthrough> => {
+    const formData = new FormData();
+    formData.append('image', image);
+    formData.append('timestamp_taken', new Date().toISOString());
+    const res = await fetch(`${BASE}/walkthroughs/${walkthrough_id}/images`, {
+      method: 'POST',
+      body: formData,
+    });
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({})) as { detail?: string };
+      throw new Error(body.detail ?? `HTTP ${res.status}`);
+    }
+    return res.json() as Promise<Walkthrough>;
+  },
 };
