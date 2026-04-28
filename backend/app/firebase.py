@@ -16,7 +16,10 @@ def initialize_firebase() -> None:
             cred = credentials.Certificate(settings.firebase_credentials_path)
         else:
             raise ValueError("Either FIREBASE_CREDENTIALS_JSON or FIREBASE_CREDENTIALS_PATH must be set")
-        firebase_admin.initialize_app(cred)
+        options = {}
+        if settings.firebase_storage_bucket:
+            options["storageBucket"] = settings.firebase_storage_bucket
+        firebase_admin.initialize_app(cred, options or None)
     global _db
     _db = firestore.client()
 
