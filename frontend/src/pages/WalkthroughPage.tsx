@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import type { Walkthrough, WalkthroughItem } from '../types';
 import { api } from '../api';
 
@@ -8,6 +8,7 @@ type EndStep = 0 | 1 | 2;
 export default function WalkthroughPage() {
   const location = useLocation();
   const navigate = useNavigate();
+  const { walkthroughId } = useParams<{ walkthroughId: string }>();
 
   const initWalkthrough = (
     location.state as { walkthrough?: Walkthrough } | null
@@ -46,8 +47,10 @@ export default function WalkthroughPage() {
   }, [walkthrough]);
 
   useEffect(() => {
-    if (!initWalkthrough) {
-      navigate('/properties', { replace: true });
+    if (!initWalkthrough && walkthroughId) {
+      api.getWalkthrough(walkthroughId).then(setWalkthrough).catch(() => {
+        navigate('/properties', { replace: true });
+      });
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -150,10 +153,10 @@ export default function WalkthroughPage() {
   };
 
   useEffect(() => {
-    if (initWalkthrough) startListening();
+    if (walkthrough) startListening();
     return stopListening;
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [!!walkthrough]);
 
   const handleEndClick = async () => {
     stopListening();
@@ -546,13 +549,14 @@ export default function WalkthroughPage() {
             zIndex: 200,
             display: 'flex',
             flexDirection: 'column',
+            overflow: 'hidden',
           }}
         >
           <video
             ref={videoRef}
             autoPlay
             playsInline
-            style={{ flex: 1, width: '100%', objectFit: 'cover' }}
+            style={{ flex: 1, width: '100%', objectFit: 'cover', minHeight: 0 }}
           />
           <div
             style={{
