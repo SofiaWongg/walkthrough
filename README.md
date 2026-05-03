@@ -30,4 +30,3 @@ npm run dev
 
 Runs at **http://localhost:5173**. API calls are proxied to the backend automatically — start the backend first.
 
-> **Note:** Speech recognition only works in Chrome (Web Speech API).
