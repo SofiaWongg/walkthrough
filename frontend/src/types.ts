@@ -38,10 +38,20 @@ export interface WalkthroughItem {
   is_from_base: boolean;
 }
 
+export interface WalkthroughImage {
+  id: string;
+  timestamp_taken: string;
+  transcript_index: number;
+  walkthrough_item_id: string | null;
+  storage_url: string;
+  vision_description: string | null;
+}
+
 export interface Walkthrough {
   id: string;
   property_id: string;
   item_list: WalkthroughItem[];
+  images: Record<string, WalkthroughImage>;
   status: WalkthroughStatus;
   transcript: { chunk: string }[];
   created_at: string;
@@ -61,6 +71,7 @@ export interface TodoItem {
   is_completed: boolean;
   property_id: string;
   walkthrough_item_id: string | null;
+  image_urls: string[] | undefined;
   priority: number | null;
   created_at: string;
   updated_at: string;

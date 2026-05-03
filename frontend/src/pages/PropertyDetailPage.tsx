@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import type { ChecklistItem, PropertyDetail, Walkthrough, WalkthroughSummary } from '../types';
+import type { ChecklistItem, PropertyDetail, Walkthrough, WalkthroughImage, WalkthroughSummary } from '../types';
 import { api } from '../api';
+import ImageGallery from '../components/ImageGallery';
 
 export default function PropertyDetailPage() {
   const { propertyId } = useParams<{ propertyId: string }>();
@@ -303,6 +304,7 @@ function WalkthroughDetailModal({
   summary: WalkthroughSummary;
   onClose: () => void;
 }) {
+  const navigate = useNavigate();
   const [walkthrough, setWalkthrough] = useState<Walkthrough | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -317,6 +319,9 @@ function WalkthroughDetailModal({
 
   const checked = walkthrough?.item_list.filter((i) => i.status === 'checked') ?? [];
   const unchecked = walkthrough?.item_list.filter((i) => i.status === 'unchecked') ?? [];
+  const photos: WalkthroughImage[] = walkthrough
+    ? Object.values(walkthrough.images ?? {})
+    : [];
 
   return (
     <BottomSheet onClose={onClose}>
@@ -338,8 +343,9 @@ function WalkthroughDetailModal({
         <>
           <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 10 }}>
             {checked.length} checked · {unchecked.length} unchecked
+            {photos.length > 0 && ` · ${photos.length} photo${photos.length !== 1 ? 's' : ''}`}
           </div>
-          <div style={{ maxHeight: 340, overflowY: 'auto' }}>
+          <div style={{ maxHeight: 260, overflowY: 'auto' }}>
             {walkthrough.item_list.map((item) => (
               <div
                 key={item.id}
@@ -377,6 +383,20 @@ function WalkthroughDetailModal({
               </div>
             ))}
           </div>
+
+          {photos.length > 0 && (
+            <div style={{ marginTop: 16, paddingTop: 16, borderTop: '1px solid var(--border)' }}>
+              <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 10 }}>Photos</div>
+              <ImageGallery
+                images={photos}
+                compact
+                onSeeAll={() => {
+                  onClose();
+                  navigate(`/walkthroughs/${walkthrough.id}/images`);
+                }}
+              />
+            </div>
+          )}
         </>
       )}
     </BottomSheet>

@@ -1,7 +1,8 @@
 import { useEffect, useState, useRef, useMemo } from 'react';
-import type { Property, TodoItem } from '../types';
+import type { Property, TodoItem, WalkthroughImage } from '../types';
 import { api } from '../api';
 import NavTabs from '../components/NavTabs';
+import ImageGallery from '../components/ImageGallery';
 
 function timeAgo(dateString: string): string {
   const date = new Date(dateString);
@@ -42,6 +43,7 @@ export default function TodosPage() {
   const [editingTodoId, setEditingTodoId] = useState<string | null>(null);
   const [editText, setEditText] = useState('');
   const [deletingTodo, setDeletingTodo] = useState<TodoItem | null>(null);
+  const [viewImagesTodo, setViewImagesTodo] = useState<TodoItem | null>(null);
 
   useEffect(() => {
     Promise.all([api.listTodoItems(), api.listProperties()])
@@ -222,6 +224,7 @@ export default function TodosPage() {
                 onSwipe={(swiped) => setSwipedTodoId(swiped ? todo.id : null)}
                 onEdit={() => startEditing(todo)}
                 onDelete={() => setDeletingTodo(todo)}
+                onViewImages={(todo.image_urls ?? []).length > 0 ? () => setViewImagesTodo(todo) : undefined}
               />
             )
           ))}
@@ -266,6 +269,7 @@ export default function TodosPage() {
                       onSwipe={(swiped) => setSwipedTodoId(swiped ? todo.id : null)}
                       onEdit={() => startEditing(todo)}
                       onDelete={() => setDeletingTodo(todo)}
+                      onViewImages={(todo.image_urls ?? []).length > 0 ? () => setViewImagesTodo(todo) : undefined}
                     />
                   )
                 ))}
@@ -304,6 +308,14 @@ export default function TodosPage() {
           </div>
         </div>
       )}
+
+      {/* Todo Images Sheet */}
+      {viewImagesTodo && (
+        <TodoImageSheet
+          todo={viewImagesTodo}
+          onClose={() => setViewImagesTodo(null)}
+        />
+      )}
     </div>
   );
 }
@@ -317,6 +329,7 @@ interface TodoCardProps {
   onSwipe: (swiped: boolean) => void;
   onEdit: () => void;
   onDelete: () => void;
+  onViewImages?: () => void;
 }
 
 function TodoCard({
@@ -328,6 +341,7 @@ function TodoCard({
   onSwipe,
   onEdit,
   onDelete,
+  onViewImages,
 }: TodoCardProps) {
   const showUpdatedAt = isDifferentTime(todo.created_at, todo.updated_at);
   const [hovered, setHovered] = useState(false);
@@ -420,6 +434,21 @@ function TodoCard({
           <span style={timestampStyle}>
             {showUpdatedAt ? timeAgo(todo.updated_at) : timeAgo(todo.created_at)}
           </span>
+          {onViewImages && (
+            <button
+              onClick={(e) => { e.stopPropagation(); onViewImages(); }}
+              title="View photos"
+              style={cameraIconButtonStyle}
+            >
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
+                <circle cx="12" cy="13" r="4"/>
+              </svg>
+              <span style={{ fontSize: 11, fontWeight: 600, lineHeight: 1 }}>
+                {(todo.image_urls ?? []).length}
+              </span>
+            </button>
+          )}
           {/* Desktop hover actions */}
           {!isTouchDevice && (
             <span style={{ ...desktopActionsStyle, opacity: hovered ? 1 : 0 }}>
@@ -760,4 +789,70 @@ const desktopActionButtonStyle: React.CSSProperties = {
   fontSize: 12,
   cursor: 'pointer',
   padding: 0,
+};
+
+const cameraIconButtonStyle: React.CSSProperties = {
+  background: 'transparent',
+  border: 'none',
+  color: 'var(--primary)',
+  cursor: 'pointer',
+  padding: '2px 4px',
+  display: 'flex',
+  alignItems: 'center',
+  gap: 3,
+  flexShrink: 0,
+};
+
+interface TodoImageSheetProps {
+  todo: TodoItem;
+  onClose: () => void;
+}
+
+function TodoImageSheet({ todo, onClose }: TodoImageSheetProps) {
+  const images: WalkthroughImage[] = (todo.image_urls ?? []).map((url, i) => ({
+    id: `img-${i}`,
+    timestamp_taken: '',
+    transcript_index: 0,
+    walkthrough_item_id: null,
+    storage_url: url,
+    vision_description: null,
+  }));
+
+  return (
+    <div style={todoImageOverlayStyle} onClick={onClose}>
+      <div style={todoImageSheetStyle} onClick={(e) => e.stopPropagation()}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 }}>
+          <div>
+            <div style={{ fontSize: 15, fontWeight: 600 }}>Photos</div>
+            <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 2 }}>{todo.text}</div>
+          </div>
+          <button
+            onClick={onClose}
+            style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-secondary)', fontSize: 18, padding: 4, lineHeight: 1 }}
+          >
+            ✕
+          </button>
+        </div>
+        <ImageGallery images={images} />
+      </div>
+    </div>
+  );
+}
+
+const todoImageOverlayStyle: React.CSSProperties = {
+  position: 'fixed',
+  inset: 0,
+  background: 'rgba(0,0,0,0.45)',
+  display: 'flex',
+  alignItems: 'flex-end',
+  zIndex: 100,
+};
+
+const todoImageSheetStyle: React.CSSProperties = {
+  background: 'var(--card)',
+  borderRadius: '14px 14px 0 0',
+  padding: '20px 20px 36px',
+  width: '100%',
+  maxHeight: '80vh',
+  overflowY: 'auto',
 };
