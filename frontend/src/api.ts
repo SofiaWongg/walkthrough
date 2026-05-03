@@ -67,4 +67,9 @@ export const api = {
       method: 'PATCH',
       body: JSON.stringify(updates),
     }),
+
+  deleteTodoItem: (id: string) =>
+    req<void>(`/todo_items/${id}`, {
+      method: 'DELETE',
+    }),
 };
