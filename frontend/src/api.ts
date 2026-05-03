@@ -1,4 +1,4 @@
-import type { Property, PropertyDetail, Walkthrough } from './types';
+import type { Property, PropertyDetail, Walkthrough, TodoItem } from './types';
 
 const BASE = `${import.meta.env.VITE_API_URL ?? ''}/api`;
 
@@ -53,4 +53,18 @@ export const api = {
     }
     return res.json() as Promise<Walkthrough>;
   },
+
+  listTodoItems: () => req<TodoItem[]>('/todo_items/'),
+
+  createTodoItem: (data: { text: string; property_id: string }) =>
+    req<TodoItem>('/todo_items/', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  updateTodoItem: (id: string, updates: Partial<TodoItem>) =>
+    req<TodoItem>(`/todo_items/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(updates),
+    }),
 };
