@@ -13,6 +13,8 @@ export default function PropertyDetailPage() {
   const [checklistOpen, setChecklistOpen] = useState(false);
   const [selectedWalkthrough, setSelectedWalkthrough] = useState<WalkthroughSummary | null>(null);
   const [selectedBaseItem, setSelectedBaseItem] = useState<ChecklistItem | null>(null);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
     if (!propertyId) return;
@@ -22,6 +24,19 @@ export default function PropertyDetailPage() {
       .catch((e: unknown) => setError((e as Error).message))
       .finally(() => setLoading(false));
   }, [propertyId]);
+
+  const handleDeleteProperty = async () => {
+    if (!propertyId || deleting) return;
+    setDeleting(true);
+    try {
+      await api.deleteProperty(propertyId);
+      navigate('/properties');
+    } catch (e: unknown) {
+      setError((e as Error).message);
+      setDeleting(false);
+      setShowDeleteConfirm(false);
+    }
+  };
 
   const handleStartWalkthrough = async () => {
     if (!propertyId || starting) return;
@@ -190,6 +205,26 @@ export default function PropertyDetailPage() {
         </div>
       )}
 
+      {/* Delete Property */}
+      <div style={{ marginTop: 32, paddingTop: 20, borderTop: '1px solid var(--border)' }}>
+        <button
+          onClick={() => setShowDeleteConfirm(true)}
+          style={{
+            background: 'none',
+            border: '1px solid var(--red)',
+            borderRadius: 'var(--radius)',
+            color: 'var(--red)',
+            padding: '10px 16px',
+            fontSize: 14,
+            fontWeight: 500,
+            cursor: 'pointer',
+            width: '100%',
+          }}
+        >
+          Delete Property
+        </button>
+      </div>
+
       {/* Walkthrough Detail Modal */}
       {selectedWalkthrough && (
         <WalkthroughDetailModal
@@ -210,6 +245,51 @@ export default function PropertyDetailPage() {
         <BottomSheet onClose={() => setSelectedBaseItem(null)}>
           <h2 style={sheetTitleStyle}>{selectedBaseItem.name}</h2>
           <p style={{ color: 'var(--text-secondary)', fontSize: 14 }}>No walkthroughs yet.</p>
+        </BottomSheet>
+      )}
+
+      {/* Delete Confirmation */}
+      {showDeleteConfirm && (
+        <BottomSheet onClose={() => !deleting && setShowDeleteConfirm(false)}>
+          <h2 style={{ ...sheetTitleStyle, marginBottom: 12 }}>Delete Property</h2>
+          <p style={{ fontSize: 15, marginBottom: 24, color: 'var(--text)' }}>
+            Are you sure you want to delete <strong>{property.name}</strong> property?
+          </p>
+          <div style={{ display: 'flex', gap: 10 }}>
+            <button
+              onClick={() => setShowDeleteConfirm(false)}
+              disabled={deleting}
+              style={{
+                flex: 1,
+                padding: 12,
+                background: 'var(--bg)',
+                border: '1px solid var(--border)',
+                borderRadius: 'var(--radius)',
+                fontSize: 15,
+                fontWeight: 600,
+                cursor: 'pointer',
+              }}
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleDeleteProperty}
+              disabled={deleting}
+              style={{
+                flex: 1,
+                padding: 12,
+                background: deleting ? '#fca5a5' : 'var(--red)',
+                color: 'white',
+                border: 'none',
+                borderRadius: 'var(--radius)',
+                fontSize: 15,
+                fontWeight: 600,
+                cursor: deleting ? 'not-allowed' : 'pointer',
+              }}
+            >
+              {deleting ? 'Deleting...' : 'Delete'}
+            </button>
+          </div>
         </BottomSheet>
       )}
     </div>
