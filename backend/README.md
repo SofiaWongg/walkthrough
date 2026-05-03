@@ -38,9 +38,9 @@ uv run uvicorn main:app --reload --host 127.0.0.1 --port 8000
 
 In the backend repo use the command `docker build --platform linux/amd64 -t walkthrough-backend .` to build a new image. Must be amd64 because GCP Cloud Run doesn't allow arm compilers. This bilds a docker container locally.
 
-docker tag walkthrough-backend:latest us-east1-docker.pkg.dev/walkthrough-3bd02/walkthrough/walkthrough-backend:latest. This points to the place we have images stored in the artifact registry. 
+`docker tag walkthrough-backend:latest us-east1-docker.pkg.dev/walkthrough-3bd02/walkthrough/walkthrough-backend:latest`. This points to the place we have images stored in the artifact registry. 
 
-Then push to artifact registry with `docker push pkg.dev/walkthrough-3bd02/walkthrough/walkthrough-backend:latest`
+Then push to artifact registry with `docker push us-east1-docker.pkg.dev/walkthrough-3bd02/walkthrough/walkthrough-backend:latest`
 
 After checking to make sure it is in the artifact registry go to google cloud run, to service details, and click 'edit & depploy new revision' -> Deploy
 
