@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import type { Property } from '../types';
 import { api } from '../api';
+import NavTabs from '../components/NavTabs';
 
 export default function PropertiesPage() {
   const navigate = useNavigate();
@@ -25,6 +26,7 @@ export default function PropertiesPage() {
 
   return (
     <div style={{ maxWidth: 600, margin: '0 auto', padding: '24px 16px' }}>
+      <NavTabs />
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
         <h1 style={{ fontSize: 26, fontWeight: 700, margin: 0 }}>Properties</h1>
         <button
