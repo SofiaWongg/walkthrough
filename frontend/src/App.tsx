@@ -2,6 +2,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import PropertiesPage from './pages/PropertiesPage';
 import PropertyDetailPage from './pages/PropertyDetailPage';
 import WalkthroughPage from './pages/WalkthroughPage';
+import WalkthroughImagesPage from './pages/WalkthroughImagesPage';
 import TodosPage from './pages/TodosPage';
 
 export default function App() {
@@ -12,6 +13,7 @@ export default function App() {
         <Route path="/properties" element={<PropertiesPage />} />
         <Route path="/properties/:propertyId" element={<PropertyDetailPage />} />
         <Route path="/walkthroughs/:walkthroughId" element={<WalkthroughPage />} />
+        <Route path="/walkthroughs/:walkthroughId/images" element={<WalkthroughImagesPage />} />
         <Route path="/todos" element={<TodosPage />} />
       </Routes>
     </BrowserRouter>

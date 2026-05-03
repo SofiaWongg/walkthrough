@@ -12,21 +12,23 @@ def doc_to_todo_item(doc) -> TodoItem:
         is_completed=data["is_completed"],
         property_id=data.get("property_id"),
         walkthrough_item_id=data.get("walkthrough_item_id"),
+        image_urls=data.get("image_urls", []),
         priority=TodoItemPriority(data["priority"]) if data.get("priority") else None,
         created_at=data["created_at"],
         updated_at=data["updated_at"],
     )
 
 
-def create_todos_from_walkthrough(walkthrough_id: str, db=None) -> list[TodoItem]:
+def create_todos_from_walkthrough(walkthrough_id: str, db=None, image_urls_by_item_id: dict[str, list[str]] | None = None) -> list[TodoItem]:
     if db is None:
         db = get_db()
+    if image_urls_by_item_id is None:
+        image_urls_by_item_id = {}
 
     walkthrough_doc = db.collection("walkthroughs").document(walkthrough_id).get()
     walkthrough_data = walkthrough_doc.to_dict()
     all_items = walkthrough_data.get("item_list", [])
 
-    # Only create todos for items that need action
     items = [
         i for i in all_items
         if i.get("status") == WalkthroughItemStatus.unchecked or i.get("notes")
@@ -44,16 +46,16 @@ def create_todos_from_walkthrough(walkthrough_id: str, db=None) -> list[TodoItem
         if item["id"] in already_imported:
             continue
         actions = _parse_actions(item.get("notes"))
-        if actions:
-            texts = [f"{item['name']}: {action}" for action in actions]
-        else:
-            texts = [item["name"]]
+        texts = [f"{item['name']}: {action}" for action in actions] if actions else [item["name"]]
+        print(f"image_urls_by_item_id: {image_urls_by_item_id}, ids: {item['id']}")
+        urls = image_urls_by_item_id.get(item["id"], [])
         for text in texts:
             _, doc_ref = db.collection("todo_items").add({
                 "text": text,
                 "is_completed": False,
                 "property_id": walkthrough_data.get("property_id"),
                 "walkthrough_item_id": item["id"],
+                "image_urls": urls,
                 "priority": None,
                 "created_at": firestore.SERVER_TIMESTAMP,
                 "updated_at": firestore.SERVER_TIMESTAMP,

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import type { Walkthrough, WalkthroughItem } from '../types';
 import { api } from '../api';
+import ImageGallery from '../components/ImageGallery';
 
 type EndStep = 0 | 1 | 2;
 
@@ -743,6 +744,19 @@ export default function WalkthroughPage() {
               </div>
             ))}
           </div>
+
+          {(() => {
+            const photos = Object.values(walkthrough.images ?? {});
+            if (photos.length === 0) return null;
+            return (
+              <div style={{ marginBottom: 16, paddingTop: 4, borderTop: '1px solid var(--border)' }}>
+                <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.5px', padding: '12px 0 10px' }}>
+                  Photos taken ({photos.length})
+                </div>
+                <ImageGallery images={photos} compact />
+              </div>
+            );
+          })()}
 
           <button
             onClick={handleFinish}

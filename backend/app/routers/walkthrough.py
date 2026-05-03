@@ -1,4 +1,6 @@
+import base64
 import json
+import urllib.request
 import uuid
 from datetime import datetime
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile
@@ -168,6 +170,14 @@ async def upload_image(
     return doc_to_walkthrough(doc_ref.get())
 
 
+def _image_to_data_uri(storage_url: str) -> str:
+    """Download an image from storage and return it as a base64 data URI."""
+    with urllib.request.urlopen(storage_url, timeout=15) as resp:
+        content_type = resp.headers.get_content_type() or "image/jpeg"
+        data = base64.b64encode(resp.read()).decode("utf-8")
+    return f"data:{content_type};base64,{data}"
+
+
 def _enrich_new_images(images: dict[str, dict], transcript: list[dict]) -> dict[str, dict]:
     """Describe any images that haven't been enriched yet, using surrounding transcript chunks as context."""
     for img in images.values():
@@ -175,8 +185,12 @@ def _enrich_new_images(images: dict[str, dict], transcript: list[dict]) -> dict[
             continue
         idx = img.get("transcript_index", 0)
         surrounding = transcript[max(0, idx - 3):idx + 3]
-        related_text = _extract_related_transcript_text(img["storage_url"], surrounding)
-        img["vision_description"] = _describe_image(img["storage_url"], related_text)
+        try:
+            image_data = _image_to_data_uri(img["storage_url"])
+        except Exception:
+            image_data = img["storage_url"]
+        related_text = _extract_related_transcript_text(image_data, surrounding)
+        img["vision_description"] = _describe_image(image_data, related_text)
     return images
 
 
@@ -402,9 +416,15 @@ def end_walkthrough(walkthrough_id: str, walkthrough: Walkthrough):
         data.get("transcript", []),
     )
 
+    current_item_list = [item.model_dump() for item in walkthrough.item_list]
+    image_links = _link_images_to_items(current_images, current_item_list)
+    for img_id, item_id in image_links.items():
+        if img_id in current_images:
+            current_images[img_id]["walkthrough_item_id"] = item_id
+
     doc_ref.update({
         "status": WalkthroughStatus.completed,
-        "item_list": [item.model_dump() for item in walkthrough.item_list],
+        "item_list": current_item_list,
         "images": current_images,
         "updated_at": firestore.SERVER_TIMESTAMP,
     })
@@ -414,6 +434,13 @@ def end_walkthrough(walkthrough_id: str, walkthrough: Walkthrough):
     if property_doc.exists and not property_doc.to_dict().get("base_checklist_id"):
         save_walkthrough_as_base_checklist(walkthrough)
 
-    create_todos_from_walkthrough(walkthrough_id, db)
+    image_urls_by_item_id: dict[str, list[str]] = {}
+    for img in current_images.values():
+        item_id = img.get("walkthrough_item_id")
+        url = img.get("storage_url")
+        if item_id and url:
+            image_urls_by_item_id.setdefault(item_id, []).append(url)
+
+    create_todos_from_walkthrough(walkthrough_id, db, image_urls_by_item_id)
 
     return doc_to_walkthrough(doc_ref.get())
