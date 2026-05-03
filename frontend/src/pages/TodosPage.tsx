@@ -1,6 +1,7 @@
 import { useEffect, useState, useRef, useMemo } from 'react';
 import type { Property, TodoItem } from '../types';
 import { api } from '../api';
+import NavTabs from '../components/NavTabs';
 
 function timeAgo(dateString: string): string {
   const date = new Date(dateString);
@@ -158,6 +159,7 @@ export default function TodosPage() {
 
   return (
     <div style={{ maxWidth: 600, margin: '0 auto', padding: '24px 16px' }}>
+      <NavTabs />
       <h1 style={{ fontSize: 26, fontWeight: 700, marginBottom: 16 }}>All Todos</h1>
 
       {/* Property Filter */}
