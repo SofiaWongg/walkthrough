@@ -16,6 +16,7 @@ class TodoItem(BaseModel):
     is_completed: bool = False
     property_id: Optional[str] = None
     walkthrough_item_id: Optional[str] = None
+    image_urls: list[str] = []
     priority: Optional[TodoItemPriority] = None
     created_at: datetime
     updated_at: datetime
