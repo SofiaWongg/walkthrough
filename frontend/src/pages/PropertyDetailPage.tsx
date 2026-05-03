@@ -155,7 +155,11 @@ export default function PropertyDetailPage() {
           {property.walkthroughs.map((w) => (
             <button
               key={w.id}
-              onClick={() => setSelectedWalkthrough(w)}
+              onClick={() =>
+                w.status === 'active'
+                  ? navigate(`/walkthroughs/${w.id}`)
+                  : setSelectedWalkthrough(w)
+              }
               style={{
                 background: 'var(--card)',
                 border: '1px solid var(--border)',

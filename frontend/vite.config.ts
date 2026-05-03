@@ -5,7 +5,7 @@ export default defineConfig({
   plugins: [react()],
   server: {
     proxy: {
-      '/api': 'http://127.0.0.1:8000',
+      '/api': 'https://walkthrough-backend-936505832896.us-east1.run.app/',  // For local use http://127.0.0.1:8000
     },
   },
 });

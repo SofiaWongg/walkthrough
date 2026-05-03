@@ -30,3 +30,15 @@ npm run dev
 
 Runs at **http://localhost:5173**. API calls are proxied to the backend automatically — start the backend first.
 
+> **Note:** Speech recognition only works in Chrome (Web Speech API).
+
+To deploy: 
+
+to run your build locally use `serve -s dist`
+
+go into the fronted 
+`npm run build`
+
+then 
+`firebase deploy` 
+to deploy
