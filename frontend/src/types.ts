@@ -54,3 +54,14 @@ export interface WalkthroughSummary {
   created_at: string;
   updated_at: string;
 }
+
+export interface TodoItem {
+  id: string;
+  text: string;
+  is_completed: boolean;
+  property_id: string;
+  walkthrough_item_id: string | null;
+  priority: number | null;
+  created_at: string;
+  updated_at: string;
+}
