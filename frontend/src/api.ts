@@ -1,4 +1,4 @@
-import type { Property, PropertyDetail, Walkthrough, TodoItem } from './types';
+import type { BaseChecklist, Property, PropertyDetail, TodoItem, Walkthrough } from './types';
 
 const BASE = `${import.meta.env.VITE_API_URL ?? ''}/api`;
 
@@ -37,6 +37,24 @@ export const api = {
     req<Walkthrough>(`/walkthroughs/${walkthrough_id}/end`, {
       method: 'POST',
       body: JSON.stringify(walkthrough),
+    }),
+
+  createProperty: (name: string) =>
+    req<Property>('/properties/', {
+      method: 'POST',
+      body: JSON.stringify({ name }),
+    }),
+
+  deleteProperty: (id: string) =>
+    req<{ message: string }>(`/properties/${id}`, { method: 'DELETE' }),
+
+  getBaseChecklist: (propertyId: string) =>
+    req<BaseChecklist>(`/properties/${propertyId}/base_checklist`),
+
+  updateBaseChecklist: (propertyId: string, items: { name: string }[]) =>
+    req<BaseChecklist>(`/properties/${propertyId}/base_checklist`, {
+      method: 'PUT',
+      body: JSON.stringify(items),
     }),
 
   uploadImage: async (walkthrough_id: string, image: File): Promise<Walkthrough> => {
