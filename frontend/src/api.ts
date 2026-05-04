@@ -90,4 +90,15 @@ export const api = {
     req<void>(`/todo_items/${id}`, {
       method: 'DELETE',
     }),
+
+  listTags: () => req<string[]>('/tags/'),
+
+  createTag: (name: string) =>
+    req<string[]>('/tags/', {
+      method: 'POST',
+      body: JSON.stringify({ name }),
+    }),
+
+  deleteTag: (name: string) =>
+    req<string[]>(`/tags/${encodeURIComponent(name)}`, { method: 'DELETE' }),
 };
