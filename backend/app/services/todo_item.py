@@ -1,8 +1,6 @@
 from firebase_admin import firestore
 from app.firebase import get_db
 from app.models.todo_item import TodoItem, TodoItemPriority
-from app.models.walkthrough_item import WalkthroughItemStatus
-
 
 def doc_to_todo_item(doc) -> TodoItem:
     data = doc.to_dict()
@@ -30,10 +28,7 @@ def create_todos_from_walkthrough(walkthrough_id: str, db=None, image_urls_by_it
     walkthrough_data = walkthrough_doc.to_dict()
     all_items = walkthrough_data.get("item_list", [])
 
-    items = [
-        i for i in all_items
-        if i.get("status") == WalkthroughItemStatus.unchecked or i.get("notes")
-    ]
+    items = [i for i in all_items if i.get("notes")]
 
     item_ids = [i["id"] for i in items]
     already_imported: set[str] = set()
