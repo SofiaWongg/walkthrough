@@ -23,9 +23,14 @@ def get_todo_items():
 def create_todo_item(body: TodoItemCreate):
     db = get_db()
 
+    property_name = None
     if body.property_id is not None:
-        if not db.collection("properties").document(body.property_id).get().exists:
+        prop_doc = db.collection("properties").document(body.property_id).get()
+        if not prop_doc.exists:
             raise HTTPException(status_code=404, detail="Property not found")
+        property_name = prop_doc.to_dict().get("name")
+
+    initial_tags = [property_name] if property_name else []
 
     _, doc_ref = db.collection("todo_items").add({
         "text": body.text,
@@ -33,6 +38,7 @@ def create_todo_item(body: TodoItemCreate):
         "property_id": body.property_id,
         "walkthrough_item_id": body.walkthrough_item_id,
         "priority": body.priority,
+        "tags": initial_tags,
         "created_at": firestore.SERVER_TIMESTAMP,
         "updated_at": firestore.SERVER_TIMESTAMP,
     })

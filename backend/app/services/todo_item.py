@@ -14,6 +14,7 @@ def doc_to_todo_item(doc) -> TodoItem:
         walkthrough_item_id=data.get("walkthrough_item_id"),
         image_urls=data.get("image_urls", []),
         priority=TodoItemPriority(data["priority"]) if data.get("priority") else None,
+        tags=data.get("tags", []),
         created_at=data["created_at"],
         updated_at=data["updated_at"],
     )
@@ -41,6 +42,14 @@ def create_todos_from_walkthrough(walkthrough_id: str, db=None, image_urls_by_it
         existing = db.collection("todo_items").where("walkthrough_item_id", "in", chunk).get()
         already_imported.update(doc.to_dict()["walkthrough_item_id"] for doc in existing)
 
+    property_name = None
+    property_id = walkthrough_data.get("property_id")
+    if property_id:
+        prop_doc = db.collection("properties").document(property_id).get()
+        if prop_doc.exists:
+            property_name = prop_doc.to_dict().get("name")
+    initial_tags = [property_name] if property_name else []
+
     created = []
     for item in items:
         if item["id"] in already_imported:
@@ -53,10 +62,11 @@ def create_todos_from_walkthrough(walkthrough_id: str, db=None, image_urls_by_it
             _, doc_ref = db.collection("todo_items").add({
                 "text": text,
                 "is_completed": False,
-                "property_id": walkthrough_data.get("property_id"),
+                "property_id": property_id,
                 "walkthrough_item_id": item["id"],
                 "image_urls": urls,
                 "priority": None,
+                "tags": initial_tags,
                 "created_at": firestore.SERVER_TIMESTAMP,
                 "updated_at": firestore.SERVER_TIMESTAMP,
             })

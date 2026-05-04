@@ -3,6 +3,7 @@ from fastapi import FastAPI
 from app.firebase import initialize_firebase, get_db
 from app.routers import property, walkthrough
 from app.routers import todo_item
+from app.routers import tag
 from fastapi.middleware.cors import CORSMiddleware
 
 
@@ -25,6 +26,7 @@ app.add_middleware(
 app.include_router(property.router, prefix="/api")
 app.include_router(walkthrough.router, prefix="/api")
 app.include_router(todo_item.router, prefix="/api")
+app.include_router(tag.router, prefix="/api")
 
 
 @app.get("/")

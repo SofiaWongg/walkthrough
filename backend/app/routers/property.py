@@ -7,6 +7,7 @@ from app.models.checklist_item import ChecklistItemCreate
 from app.models.property import Property, PropertyCreate, PropertyDetail
 from app.models.walkthrough import WalkthroughSummary, WalkthroughStatus
 from app.services.property import doc_to_property, doc_to_base_checklist
+from app.services.tag import get_tag_list, set_tag_list, remove_tag_everywhere
 
 router = APIRouter(prefix="/properties", tags=["properties"])
 
@@ -33,6 +34,10 @@ def create_property(body: PropertyCreate):
         "created_at": firestore.SERVER_TIMESTAMP,
         "updated_at": firestore.SERVER_TIMESTAMP,
     })
+    tags = get_tag_list(db)
+    if body.name not in tags:
+        tags.append(body.name)
+        set_tag_list(tags, db)
     return doc_to_property(doc_ref.get())
 
 
@@ -81,9 +86,13 @@ def get_property(property_id: str, include_cancelled: bool = Query(default=False
 def delete_property(property_id: str):
     db = get_db()
     doc_ref = db.collection("properties").document(property_id)
-    if not doc_ref.get().exists:
+    prop_doc = doc_ref.get()
+    if not prop_doc.exists:
         raise HTTPException(status_code=404, detail="Property not found")
+    prop_name = prop_doc.to_dict().get("name")
     doc_ref.delete()
+    if prop_name:
+        remove_tag_everywhere(prop_name, db)
     return {"message": f"Property {property_id} deleted successfully"}
 
 

@@ -18,6 +18,7 @@ class TodoItem(BaseModel):
     walkthrough_item_id: Optional[str] = None
     image_urls: list[str] = []
     priority: Optional[TodoItemPriority] = None
+    tags: list[str] = []
     created_at: datetime
     updated_at: datetime
 
@@ -33,6 +34,7 @@ class TodoItemUpdate(BaseModel):
     text: Optional[str] = None
     is_completed: Optional[bool] = None
     priority: Optional[TodoItemPriority] = None
+    tags: Optional[list[str]] = None
 
 
 class BulkAddFromWalkthroughRequest(BaseModel):

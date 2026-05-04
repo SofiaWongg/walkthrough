@@ -1,4 +1,5 @@
 import { useEffect, useState, useRef, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import type { Property, TodoItem, WalkthroughImage } from '../types';
 import { api } from '../api';
 import NavTabs from '../components/NavTabs';
@@ -24,13 +25,11 @@ function timeAgo(dateString: string): string {
   return `${years}y ago`;
 }
 
-function isDifferentTime(a: string, b: string): boolean {
-  return Math.abs(new Date(a).getTime() - new Date(b).getTime()) > 1000;
-}
 
 export default function TodosPage() {
   const [todos, setTodos] = useState<TodoItem[]>([]);
   const [properties, setProperties] = useState<Property[]>([]);
+  const [allTags, setAllTags] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showCompleted, setShowCompleted] = useState(false);
@@ -39,17 +38,19 @@ export default function TodosPage() {
   const [newTodoText, setNewTodoText] = useState('');
   const [newTodoPropertyId, setNewTodoPropertyId] = useState<string>('');
   const [filterPropertyId, setFilterPropertyId] = useState<string>('');
+  const [filterTag, setFilterTag] = useState<string>('');
   const [swipedTodoId, setSwipedTodoId] = useState<string | null>(null);
   const [editingTodoId, setEditingTodoId] = useState<string | null>(null);
   const [editText, setEditText] = useState('');
-  const [deletingTodo, setDeletingTodo] = useState<TodoItem | null>(null);
   const [viewImagesTodo, setViewImagesTodo] = useState<TodoItem | null>(null);
+  const [showTagManager, setShowTagManager] = useState(false);
 
   useEffect(() => {
-    Promise.all([api.listTodoItems(), api.listProperties()])
-      .then(([todosData, propertiesData]) => {
+    Promise.all([api.listTodoItems(), api.listProperties(), api.listTags()])
+      .then(([todosData, propertiesData, tagsData]) => {
         setTodos(todosData);
         setProperties(propertiesData);
+        setAllTags(tagsData);
         if (propertiesData.length > 0) {
           setNewTodoPropertyId(propertiesData[0].id);
         }
@@ -57,6 +58,33 @@ export default function TodosPage() {
       .catch((e: unknown) => setError((e as Error).message))
       .finally(() => setLoading(false));
   }, []);
+
+  const handleAddTagToTodo = async (todo: TodoItem, tag: string) => {
+    if (todo.tags.includes(tag)) return;
+    const newTags = [...todo.tags, tag];
+    setUpdatingIds((prev) => new Set(prev).add(todo.id));
+    try {
+      const updated = await api.updateTodoItem(todo.id, { tags: newTags });
+      setTodos((prev) => prev.map((t) => (t.id === todo.id ? updated : t)));
+    } catch (e: unknown) {
+      setError((e as Error).message);
+    } finally {
+      setUpdatingIds((prev) => { const n = new Set(prev); n.delete(todo.id); return n; });
+    }
+  };
+
+  const handleRemoveTagFromTodo = async (todo: TodoItem, tag: string) => {
+    const newTags = todo.tags.filter((t) => t !== tag);
+    setUpdatingIds((prev) => new Set(prev).add(todo.id));
+    try {
+      const updated = await api.updateTodoItem(todo.id, { tags: newTags });
+      setTodos((prev) => prev.map((t) => (t.id === todo.id ? updated : t)));
+    } catch (e: unknown) {
+      setError((e as Error).message);
+    } finally {
+      setUpdatingIds((prev) => { const n = new Set(prev); n.delete(todo.id); return n; });
+    }
+  };
 
   const handleToggleTodo = async (todo: TodoItem) => {
     setUpdatingIds((prev) => new Set(prev).add(todo.id));
@@ -118,7 +146,6 @@ export default function TodosPage() {
     try {
       await api.deleteTodoItem(todoId);
       setTodos((prev) => prev.filter((t) => t.id !== todoId));
-      setDeletingTodo(null);
       setSwipedTodoId(null);
     } catch (e: unknown) {
       setError((e as Error).message);
@@ -149,11 +176,12 @@ export default function TodosPage() {
   // Filter and sort todos
   const filteredTodos = todos
     .filter((t) => !filterPropertyId || t.property_id === filterPropertyId)
+    .filter((t) => !filterTag || t.tags.includes(filterTag))
     .sort((a, b) => {
       if (a.is_completed !== b.is_completed) {
         return a.is_completed ? 1 : -1;
       }
-      return new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime();
+      return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
     });
 
   const incompleteTodos = filteredTodos.filter((t) => !t.is_completed);
@@ -162,22 +190,27 @@ export default function TodosPage() {
   return (
     <div style={{ maxWidth: 600, margin: '0 auto', padding: '24px 16px' }}>
       <NavTabs />
-      <h1 style={{ fontSize: 26, fontWeight: 700, marginBottom: 16 }}>All Todos</h1>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+        <h1 style={{ fontSize: 26, fontWeight: 700, margin: 0 }}>All Todos</h1>
+        <button onClick={() => setShowTagManager(true)} style={manageTagsButtonStyle}>
+          Manage Tags
+        </button>
+      </div>
 
-      {/* Property Filter */}
+      {/* Filters */}
       <div style={filterContainerStyle}>
-        <select
+        <FilterDropdown
           value={filterPropertyId}
-          onChange={(e) => setFilterPropertyId(e.target.value)}
-          style={filterSelectStyle}
-        >
-          <option value="">All Properties</option>
-          {properties.map((p) => (
-            <option key={p.id} value={p.id}>
-              {p.name}
-            </option>
-          ))}
-        </select>
+          onChange={setFilterPropertyId}
+          placeholder="All Properties"
+          options={properties.map((p) => ({ value: p.id, label: p.name }))}
+        />
+        <FilterDropdown
+          value={filterTag}
+          onChange={setFilterTag}
+          placeholder="All Tags"
+          options={allTags.map((t) => ({ value: t, label: t }))}
+        />
       </div>
 
       {loading && <p style={{ color: 'var(--text-secondary)' }}>Loading...</p>}
@@ -218,13 +251,16 @@ export default function TodosPage() {
                 key={todo.id}
                 todo={todo}
                 propertyName={getPropertyName(todo.property_id)}
+                allTags={allTags}
                 updating={updatingIds.has(todo.id)}
                 onToggle={() => handleToggleTodo(todo)}
                 isSwiped={swipedTodoId === todo.id}
                 onSwipe={(swiped) => setSwipedTodoId(swiped ? todo.id : null)}
                 onEdit={() => startEditing(todo)}
-                onDelete={() => setDeletingTodo(todo)}
+                onDelete={() => handleDeleteTodo(todo.id)}
                 onViewImages={(todo.image_urls ?? []).length > 0 ? () => setViewImagesTodo(todo) : undefined}
+                onAddTag={(tag) => handleAddTagToTodo(todo, tag)}
+                onRemoveTag={(tag) => handleRemoveTagFromTodo(todo, tag)}
               />
             )
           ))}
@@ -263,13 +299,16 @@ export default function TodosPage() {
                       key={todo.id}
                       todo={todo}
                       propertyName={getPropertyName(todo.property_id)}
+                      allTags={allTags}
                       updating={updatingIds.has(todo.id)}
                       onToggle={() => handleToggleTodo(todo)}
                       isSwiped={swipedTodoId === todo.id}
                       onSwipe={(swiped) => setSwipedTodoId(swiped ? todo.id : null)}
                       onEdit={() => startEditing(todo)}
-                      onDelete={() => setDeletingTodo(todo)}
+                      onDelete={() => handleDeleteTodo(todo.id)}
                       onViewImages={(todo.image_urls ?? []).length > 0 ? () => setViewImagesTodo(todo) : undefined}
+                      onAddTag={(tag) => handleAddTagToTodo(todo, tag)}
+                      onRemoveTag={(tag) => handleRemoveTagFromTodo(todo, tag)}
                     />
                   )
                 ))}
@@ -285,35 +324,26 @@ export default function TodosPage() {
       )}
 
       {/* Delete Confirmation Modal */}
-      {deletingTodo && (
-        <div style={modalOverlayStyle} onClick={() => setDeletingTodo(null)}>
-          <div style={modalStyle} onClick={(e) => e.stopPropagation()}>
-            <p style={{ marginBottom: 16, fontSize: 15 }}>
-              Delete "{deletingTodo.text}"?
-            </p>
-            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-              <button
-                onClick={() => setDeletingTodo(null)}
-                style={modalButtonStyle}
-              >
-                Cancel
-              </button>
-              <button
-                onClick={() => handleDeleteTodo(deletingTodo.id)}
-                style={{ ...modalButtonStyle, background: 'var(--red)', color: 'white' }}
-              >
-                Delete
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Todo Images Sheet */}
       {viewImagesTodo && (
         <TodoImageSheet
           todo={viewImagesTodo}
           onClose={() => setViewImagesTodo(null)}
+        />
+      )}
+
+      {/* Tag Manager Modal */}
+      {showTagManager && (
+        <TagManagerModal
+          tags={allTags}
+          onClose={() => setShowTagManager(false)}
+          onTagsChange={setAllTags}
+          onTagDeleted={(deleted) => {
+            setTodos((prev) =>
+              prev.map((t) => ({ ...t, tags: t.tags.filter((tag) => tag !== deleted) }))
+            );
+          }}
         />
       )}
     </div>
@@ -323,6 +353,7 @@ export default function TodosPage() {
 interface TodoCardProps {
   todo: TodoItem;
   propertyName: string;
+  allTags: string[];
   updating: boolean;
   onToggle: () => void;
   isSwiped: boolean;
@@ -330,11 +361,15 @@ interface TodoCardProps {
   onEdit: () => void;
   onDelete: () => void;
   onViewImages?: () => void;
+  onAddTag: (tag: string) => void;
+  onRemoveTag: (tag: string) => void;
 }
+
 
 function TodoCard({
   todo,
   propertyName,
+  allTags,
   updating,
   onToggle,
   isSwiped,
@@ -342,16 +377,51 @@ function TodoCard({
   onEdit,
   onDelete,
   onViewImages,
+  onAddTag,
+  onRemoveTag,
 }: TodoCardProps) {
-  const showUpdatedAt = isDifferentTime(todo.created_at, todo.updated_at);
   const [hovered, setHovered] = useState(false);
   const touchStartX = useRef<number>(0);
   const touchCurrentX = useRef<number>(0);
   const [dragOffset, setDragOffset] = useState(0);
+  const [showPicker, setShowPicker] = useState(false);
+  const [pickerPos, setPickerPos] = useState<{ top: number; left: number } | null>(null);
+  const plusButtonRef = useRef<HTMLButtonElement>(null);
+  const pickerPortalRef = useRef<HTMLDivElement>(null);
+  const tagsOuterRef = useRef<HTMLDivElement>(null);
+  const tagsInnerRef = useRef<HTMLDivElement>(null);
+  const [tagsOverflow, setTagsOverflow] = useState(false);
+  const [showTagPopover, setShowTagPopover] = useState(false);
+  const [tagPopoverPos, setTagPopoverPos] = useState<{ top: number; left: number } | null>(null);
+  const tagPopoverRef = useRef<HTMLDivElement>(null);
   const isTouchDevice = useMemo(
     () => typeof window !== 'undefined' && ('ontouchstart' in window || navigator.maxTouchPoints > 0),
     []
   );
+
+  useEffect(() => {
+    if (!showPicker) return;
+    const handleClick = (e: MouseEvent) => {
+      const target = e.target as Node;
+      if (!plusButtonRef.current?.contains(target) && !pickerPortalRef.current?.contains(target)) {
+        setShowPicker(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, [showPicker]);
+
+  useEffect(() => {
+    if (!showTagPopover) return;
+    const handleClick = (e: MouseEvent) => {
+      const target = e.target as Node;
+      if (!tagsOuterRef.current?.contains(target) && !tagPopoverRef.current?.contains(target)) {
+        setShowTagPopover(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, [showTagPopover]);
 
   const handleTouchStart = (e: React.TouchEvent) => {
     touchStartX.current = e.touches[0].clientX;
@@ -372,16 +442,31 @@ function TodoCard({
     const diff = touchStartX.current - touchCurrentX.current;
     if (diff > 60) {
       onSwipe(true);
-      setDragOffset(120);
+      setDragOffset(180);
     } else if (diff < -60 && isSwiped) {
       onSwipe(false);
       setDragOffset(0);
     } else {
-      setDragOffset(isSwiped ? 120 : 0);
+      setDragOffset(isSwiped ? 180 : 0);
     }
   };
 
-  const offset = isSwiped ? 120 : dragOffset;
+  const offset = isSwiped ? 180 : dragOffset;
+
+  const tags = todo.tags ?? [];
+  const availableTags = allTags.filter((t) => !tags.includes(t));
+
+  useEffect(() => {
+    const outer = tagsOuterRef.current;
+    const inner = tagsInnerRef.current;
+    if (!outer || !inner) return;
+    const check = () => setTagsOverflow(inner.scrollWidth > outer.clientWidth);
+    check();
+    const ro = new ResizeObserver(check);
+    ro.observe(outer);
+    ro.observe(inner);
+    return () => ro.disconnect();
+  }, [tags, propertyName]);
 
   return (
     <div style={{ position: 'relative', overflow: 'hidden' }}>
@@ -400,10 +485,9 @@ function TodoCard({
       {/* Main content */}
       <div
         style={{
-          ...rowStyle,
           background: hovered ? 'rgba(0, 0, 0, 0.05)' : 'var(--bg)',
           transform: `translateX(-${offset}px)`,
-          transition: dragOffset === 0 || dragOffset === 120 ? 'transform 0.2s' : 'none',
+          transition: dragOffset === 0 || dragOffset === 180 ? 'transform 0.2s' : 'none',
         }}
         onMouseEnter={() => setHovered(true)}
         onMouseLeave={() => setHovered(false)}
@@ -411,53 +495,177 @@ function TodoCard({
         onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}
       >
-        <label style={checkboxLabelStyle}>
-          <input
-            type="checkbox"
-            checked={todo.is_completed}
-            onChange={onToggle}
-            disabled={updating}
-            style={checkboxStyle}
-          />
-          <span
-            style={{
-              ...todoTextStyle,
-              textDecoration: todo.is_completed ? 'line-through' : 'none',
-              color: todo.is_completed ? 'var(--text-secondary)' : 'var(--text)',
-            }}
-          >
-            {todo.text}
-          </span>
-        </label>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
-          <span style={propertyPillStyle}>{propertyName}</span>
-          <span style={timestampStyle}>
-            {showUpdatedAt ? timeAgo(todo.updated_at) : timeAgo(todo.created_at)}
-          </span>
-          {onViewImages && (
-            <button
-              onClick={(e) => { e.stopPropagation(); onViewImages(); }}
-              title="View photos"
-              style={cameraIconButtonStyle}
-            >
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
-                <circle cx="12" cy="13" r="4"/>
-              </svg>
-              <span style={{ fontSize: 11, fontWeight: 600, lineHeight: 1 }}>
-                {(todo.image_urls ?? []).length}
-              </span>
-            </button>
-          )}
-          {/* Desktop hover actions */}
-          {!isTouchDevice && (
-            <span style={{ ...desktopActionsStyle, opacity: hovered ? 1 : 0 }}>
-              <button onClick={onEdit} style={desktopActionButtonStyle}>
-                Edit
+        <div style={{ ...rowStyle, padding: isTouchDevice ? '6px 8px' : '9px 12px' }}>
+          {/* Left: flex column — line 1: [checkbox + text], line 2: [tags full width] */}
+          <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minWidth: 0, gap: 5 }}>
+            {/* Line 1 */}
+            <div style={{ display: 'flex', alignItems: 'flex-start', gap: 9 }}>
+              <button
+                onClick={onToggle}
+                disabled={updating}
+                style={checkboxStyle}
+                aria-label={todo.is_completed ? 'Mark incomplete' : 'Mark complete'}
+              >
+                {todo.is_completed && (
+                  <svg width="11" height="11" viewBox="0 0 11 11" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                    <polyline points="1.5,5.5 4.2,8.5 9.5,2" />
+                  </svg>
+                )}
               </button>
-              <DesktopDeleteButton onClick={onDelete} />
-            </span>
-          )}
+              <span
+                style={{
+                  ...todoTextStyle,
+                  display: 'block',
+                  flex: 1,
+                  minWidth: 0,
+                  textDecoration: todo.is_completed ? 'line-through' : 'none',
+                  color: todo.is_completed ? 'var(--text-secondary)' : 'var(--text)',
+                }}
+              >
+                {todo.text}
+              </span>
+            </div>
+
+            {/* Line 2: tags — spans full width, no indent */}
+            <div
+              ref={tagsOuterRef}
+              style={{ position: 'relative', overflow: 'hidden', cursor: 'pointer' }}
+              onClick={(e) => {
+                e.stopPropagation();
+                if (showTagPopover) { setShowTagPopover(false); return; }
+                const rect = tagsOuterRef.current!.getBoundingClientRect();
+                setTagPopoverPos({ top: rect.bottom + 6, left: rect.left });
+                setShowTagPopover(true);
+              }}
+            >
+              <div ref={tagsInnerRef} style={{ display: 'flex', alignItems: 'center', gap: 5, flexWrap: 'nowrap', paddingRight: tagsOverflow ? 42 : 0 }}>
+                {availableTags.length > 0 && (
+                  <>
+                    <button
+                      ref={plusButtonRef}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (showPicker) { setShowPicker(false); return; }
+                        const rect = plusButtonRef.current!.getBoundingClientRect();
+                        setPickerPos({ top: rect.bottom + 4, left: rect.left });
+                        setShowPicker(true);
+                      }}
+                      style={addTagBubbleStyle}
+                      title="Add tag"
+                    >
+                      +
+                    </button>
+                    {showPicker && pickerPos && createPortal(
+                      <div ref={pickerPortalRef} style={{ ...tagPickerStyle, position: 'fixed', top: pickerPos.top, left: pickerPos.left }}>
+                        {availableTags.map((tag) => (
+                          <button
+                            key={tag}
+                            onClick={(e) => { e.stopPropagation(); onAddTag(tag); setShowPicker(false); }}
+                            style={tagPickerItemStyle}
+                          >
+                            {tag}
+                          </button>
+                        ))}
+                      </div>,
+                      document.body
+                    )}
+                  </>
+                )}
+                {propertyName && (
+                  <span style={propertyPillStyle}>{propertyName}</span>
+                )}
+                {tags.map((tag) => (
+                  <span key={tag} style={{ ...tagPillStyle, ...tagColor(tag) }}>
+                    {tag}
+                    <button
+                      onClick={(e) => { e.stopPropagation(); onRemoveTag(tag); }}
+                      style={{ ...tagRemoveButtonStyle, color: tagColor(tag).color }}
+                      title={`Remove tag "${tag}"`}
+                    >
+                      ×
+                    </button>
+                  </span>
+                ))}
+              </div>
+              {tagsOverflow && (
+                <div style={{
+                  position: 'absolute', right: 0, top: 0, bottom: 0, width: 42,
+                  background: `linear-gradient(to right, transparent, var(--bg))`,
+                  pointerEvents: 'none',
+                }} />
+              )}
+            </div>
+            {showTagPopover && tagPopoverPos && createPortal(
+              <div
+                ref={tagPopoverRef}
+                style={{ ...tagPickerStyle, position: 'fixed', top: tagPopoverPos.top, left: tagPopoverPos.left, padding: 10, minWidth: 180 }}
+                onClick={(e) => e.stopPropagation()}
+              >
+                {propertyName && (
+                  <span style={{ ...propertyPillStyle, display: 'inline-block', marginBottom: 6 }}>{propertyName}</span>
+                )}
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
+                  {tags.map((tag) => (
+                    <span key={tag} style={{ ...tagPillStyle, ...tagColor(tag) }}>
+                      {tag}
+                      <button
+                        onClick={(e) => { e.stopPropagation(); onRemoveTag(tag); }}
+                        style={{ ...tagRemoveButtonStyle, color: tagColor(tag).color }}
+                        title={`Remove "${tag}"`}
+                      >×</button>
+                    </span>
+                  ))}
+                  {tags.length === 0 && (
+                    <span style={{ fontSize: 13, color: 'var(--text-secondary)' }}>No tags</span>
+                  )}
+                </div>
+                {availableTags.length > 0 && (
+                  <div style={{ marginTop: 8, borderTop: '1px solid var(--border)', paddingTop: 6 }}>
+                    {availableTags.map((tag) => (
+                      <button
+                        key={tag}
+                        onClick={(e) => { e.stopPropagation(); onAddTag(tag); }}
+                        style={{ ...tagPickerItemStyle, padding: '5px 10px' }}
+                      >
+                        + {tag}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>,
+              document.body
+            )}
+          </div>
+
+          {/* Right: time, camera, actions */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexShrink: 0, alignSelf: 'flex-start' }}>
+            {!isTouchDevice && (
+              <span style={timestampStyle}>
+                {timeAgo(todo.created_at)}
+              </span>
+            )}
+            {onViewImages && (
+              <button
+                onClick={(e) => { e.stopPropagation(); onViewImages(); }}
+                title="View photos"
+                style={cameraIconButtonStyle}
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
+                  <circle cx="12" cy="13" r="4"/>
+                </svg>
+                <span style={{ fontSize: 14, fontWeight: 600, lineHeight: 1 }}>
+                  {(todo.image_urls ?? []).length}
+                </span>
+              </button>
+            )}
+            {!isTouchDevice && (
+              <span style={{ ...desktopActionsStyle, opacity: hovered ? 1 : 0 }}>
+                <button onClick={onEdit} style={desktopActionButtonStyle}>Edit</button>
+                <DesktopDeleteButton onClick={onDelete} />
+              </span>
+            )}
+          </div>
         </div>
       </div>
     </div>
@@ -573,17 +781,13 @@ function AddTodoRow({
         style={addInputStyle}
       />
       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-        <select
+        <FilterDropdown
           value={selectedPropertyId}
-          onChange={(e) => onPropertyChange(e.target.value)}
-          style={propertySelectStyle}
-        >
-          {properties.map((p) => (
-            <option key={p.id} value={p.id}>
-              {p.name}
-            </option>
-          ))}
-        </select>
+          onChange={onPropertyChange}
+          placeholder="Property"
+          showPlaceholderOption={false}
+          options={properties.map((p) => ({ value: p.id, label: p.name }))}
+        />
         <button onClick={onSubmit} style={addActionButtonStyle}>
           Add
         </button>
@@ -604,26 +808,113 @@ const errorBannerStyle: React.CSSProperties = {
   fontSize: 14,
 };
 
-const filterContainerStyle: React.CSSProperties = {
-  marginBottom: 16,
+interface FilterDropdownProps {
+  value: string;
+  onChange: (val: string) => void;
+  options: { value: string; label: string }[];
+  placeholder: string;
+  showPlaceholderOption?: boolean;
+}
+
+function FilterDropdown({ value, onChange, options, placeholder, showPlaceholderOption = true }: FilterDropdownProps) {
+  const [open, setOpen] = useState(false);
+  const wrapperRef = useRef<HTMLDivElement>(null);
+  const selected = options.find((o) => o.value === value);
+
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e: MouseEvent) => {
+      if (!wrapperRef.current?.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [open]);
+
+  return (
+    <div ref={wrapperRef} style={{ position: 'relative', flex: 1 }}>
+      <button
+        onClick={() => setOpen((o) => !o)}
+        style={{
+          width: '100%',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: 8,
+          padding: '8px 12px',
+          fontSize: 15,
+          fontWeight: 500,
+          border: '1px solid var(--border)',
+          borderRadius: 'var(--radius)',
+          background: 'var(--card)',
+          color: value ? 'var(--text)' : 'var(--text-secondary)',
+          cursor: 'pointer',
+        }}
+      >
+        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          {selected ? selected.label : placeholder}
+        </span>
+        <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="2" style={{ flexShrink: 0, opacity: 0.5, transform: open ? 'rotate(180deg)' : 'none', transition: 'transform 0.15s' }}>
+          <polyline points="2,4 6,8 10,4" />
+        </svg>
+      </button>
+      {open && (
+        <div style={{
+          position: 'absolute',
+          top: 'calc(100% + 4px)',
+          left: 0,
+          right: 0,
+          zIndex: 999,
+          background: 'var(--card)',
+          border: '1px solid var(--border)',
+          borderRadius: 'var(--radius)',
+          boxShadow: '0 4px 12px rgba(0,0,0,0.12)',
+          overflow: 'hidden',
+        }}>
+          {showPlaceholderOption && (
+            <button
+              onClick={() => { onChange(''); setOpen(false); }}
+              style={{ ...filterOptionStyle, color: value === '' ? 'var(--primary)' : 'var(--text-secondary)' }}
+            >
+              {placeholder}
+            </button>
+          )}
+          {options.map((opt) => (
+            <button
+              key={opt.value}
+              onClick={() => { onChange(opt.value); setOpen(false); }}
+              style={{ ...filterOptionStyle, color: value === opt.value ? 'var(--primary)' : 'var(--text)' }}
+            >
+              {opt.label}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+const filterOptionStyle: React.CSSProperties = {
+  display: 'block',
+  width: '100%',
+  background: 'none',
+  border: 'none',
+  padding: '10px 14px',
+  fontSize: 15,
+  textAlign: 'left',
+  cursor: 'pointer',
 };
 
-const filterSelectStyle: React.CSSProperties = {
-  padding: '8px 12px',
-  fontSize: 14,
-  border: '1px solid var(--border)',
-  borderRadius: 'var(--radius)',
-  background: 'var(--card)',
-  color: 'var(--text)',
-  cursor: 'pointer',
-  minWidth: 150,
+const filterContainerStyle: React.CSSProperties = {
+  display: 'flex',
+  gap: 8,
+  marginBottom: 16,
 };
 
 const rowStyle: React.CSSProperties = {
   display: 'flex',
-  alignItems: 'center',
+  alignItems: 'flex-start',
   justifyContent: 'space-between',
-  padding: '6px 8px',
+  padding: '9px 12px',
   transition: 'background 0.1s',
 };
 
@@ -637,33 +928,37 @@ const checkboxLabelStyle: React.CSSProperties = {
 };
 
 const checkboxStyle: React.CSSProperties = {
-  width: 16,
-  height: 16,
+  width: 18,
+  height: 18,
+  borderRadius: 4,
+  border: '2px solid var(--text-secondary)',
+  background: 'transparent',
   cursor: 'pointer',
-  accentColor: 'var(--primary)',
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
   flexShrink: 0,
+  padding: 0,
+  marginTop: 2,
 };
 
 const todoTextStyle: React.CSSProperties = {
-  fontSize: 14,
-  lineHeight: 1,
-  whiteSpace: 'nowrap',
-  overflow: 'hidden',
-  textOverflow: 'ellipsis',
+  fontSize: 17,
+  lineHeight: 1.3,
 };
 
 const propertyPillStyle: React.CSSProperties = {
-  fontSize: 11,
+  fontSize: 13,
   fontWeight: 500,
   color: 'var(--primary)',
   background: 'rgba(37, 99, 235, 0.1)',
-  padding: '2px 8px',
-  borderRadius: 12,
+  padding: '2px 9px',
+  borderRadius: 14,
   whiteSpace: 'nowrap',
 };
 
 const timestampStyle: React.CSSProperties = {
-  fontSize: 12,
+  fontSize: 18,
   color: 'var(--text-secondary)',
   whiteSpace: 'nowrap',
 };
@@ -728,21 +1023,21 @@ const swipeActionsStyle: React.CSSProperties = {
 };
 
 const editButtonStyle: React.CSSProperties = {
-  width: 60,
+  width: 90,
   border: 'none',
   background: 'var(--primary)',
   color: 'white',
-  fontSize: 13,
+  fontSize: 19,
   fontWeight: 500,
   cursor: 'pointer',
 };
 
 const deleteButtonStyle: React.CSSProperties = {
-  width: 60,
+  width: 90,
   border: 'none',
   background: 'var(--red)',
   color: 'white',
-  fontSize: 13,
+  fontSize: 19,
   fontWeight: 500,
   cursor: 'pointer',
 };
@@ -786,7 +1081,7 @@ const desktopActionButtonStyle: React.CSSProperties = {
   background: 'transparent',
   border: 'none',
   color: 'var(--text-secondary)',
-  fontSize: 12,
+  fontSize: 18,
   cursor: 'pointer',
   padding: 0,
 };
@@ -799,7 +1094,7 @@ const cameraIconButtonStyle: React.CSSProperties = {
   padding: '2px 4px',
   display: 'flex',
   alignItems: 'center',
-  gap: 3,
+  gap: 4,
   flexShrink: 0,
 };
 
@@ -838,6 +1133,180 @@ function TodoImageSheet({ todo, onClose }: TodoImageSheetProps) {
     </div>
   );
 }
+
+interface TagManagerModalProps {
+  tags: string[];
+  onClose: () => void;
+  onTagsChange: (tags: string[]) => void;
+  onTagDeleted: (tag: string) => void;
+}
+
+function TagManagerModal({ tags, onClose, onTagsChange, onTagDeleted }: TagManagerModalProps) {
+  const [newTagName, setNewTagName] = useState('');
+  const [tagError, setTagError] = useState<string | null>(null);
+  const [deletingTag, setDeletingTag] = useState<string | null>(null);
+
+  const handleCreate = async () => {
+    const name = newTagName.trim();
+    if (!name) return;
+    setTagError(null);
+    try {
+      const updated = await api.createTag(name);
+      onTagsChange(updated);
+      setNewTagName('');
+    } catch (e: unknown) {
+      setTagError((e as Error).message);
+    }
+  };
+
+  const handleDelete = async (tag: string) => {
+    setDeletingTag(tag);
+    setTagError(null);
+    try {
+      const updated = await api.deleteTag(tag);
+      onTagsChange(updated);
+      onTagDeleted(tag);
+    } catch (e: unknown) {
+      setTagError((e as Error).message);
+    } finally {
+      setDeletingTag(null);
+    }
+  };
+
+  return (
+    <div style={modalOverlayStyle} onClick={onClose}>
+      <div style={{ ...modalStyle, maxWidth: 380, width: '90%' }} onClick={(e) => e.stopPropagation()}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+          <span style={{ fontSize: 16, fontWeight: 600 }}>Manage Tags</span>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-secondary)', fontSize: 18, padding: 4, lineHeight: 1 }}>
+            ✕
+          </button>
+        </div>
+
+        {tagError && <div style={{ ...errorBannerStyle, marginBottom: 12 }}>{tagError}</div>}
+
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 16, minHeight: 32 }}>
+          {tags.length === 0 && <span style={{ color: 'var(--text-secondary)', fontSize: 13 }}>No tags yet.</span>}
+          {tags.map((tag) => (
+            <span key={tag} style={{ ...tagPillStyle, ...tagColor(tag), opacity: deletingTag === tag ? 0.5 : 1 }}>
+              {tag}
+              <button
+                onClick={() => handleDelete(tag)}
+                style={{ ...tagRemoveButtonStyle, color: tagColor(tag).color }}
+                disabled={deletingTag === tag}
+                title={`Delete tag "${tag}"`}
+              >
+                ×
+              </button>
+            </span>
+          ))}
+        </div>
+
+        <div style={{ display: 'flex', gap: 8 }}>
+          <input
+            type="text"
+            value={newTagName}
+            onChange={(e) => setNewTagName(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Enter') handleCreate(); }}
+            placeholder="New tag name..."
+            style={{ ...addInputStyle, border: '1px solid var(--border)', borderRadius: 'var(--radius)', padding: '6px 10px', flex: 1 }}
+            autoFocus
+          />
+          <button
+            onClick={handleCreate}
+            disabled={!newTagName.trim()}
+            style={{ ...addActionButtonStyle, border: '1px solid var(--primary)', borderRadius: 'var(--radius)', padding: '6px 12px', opacity: newTagName.trim() ? 1 : 0.4 }}
+          >
+            Add
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+const manageTagsButtonStyle: React.CSSProperties = {
+  background: 'transparent',
+  border: '1px solid var(--border)',
+  borderRadius: 'var(--radius)',
+  color: 'var(--text-secondary)',
+  fontSize: 13,
+  cursor: 'pointer',
+  padding: '6px 12px',
+};
+
+const addTagBubbleStyle: React.CSSProperties = {
+  display: 'inline-flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  width: 22,
+  height: 22,
+  borderRadius: '50%',
+  border: '1px dashed var(--border)',
+  background: 'transparent',
+  color: 'var(--text-secondary)',
+  fontSize: 16,
+  lineHeight: 1,
+  cursor: 'pointer',
+  padding: 0,
+  flexShrink: 0,
+};
+
+const tagPickerStyle: React.CSSProperties = {
+  zIndex: 9999,
+  background: 'var(--card)',
+  border: '1px solid var(--border)',
+  borderRadius: 'var(--radius)',
+  boxShadow: '0 4px 12px rgba(0,0,0,0.12)',
+  display: 'flex',
+  flexDirection: 'column',
+  minWidth: 135,
+  overflow: 'hidden',
+};
+
+const tagPickerItemStyle: React.CSSProperties = {
+  background: 'none',
+  border: 'none',
+  padding: '8px 14px',
+  fontSize: 14,
+  cursor: 'pointer',
+  textAlign: 'left',
+  color: 'var(--text)',
+};
+
+function tagColor(tag: string): { background: string; color: string } {
+  let hash = 0;
+  for (let i = 0; i < tag.length; i++) hash = (hash * 31 + tag.charCodeAt(i)) >>> 0;
+  const hue = hash % 360;
+  return {
+    background: `hsl(${hue}, 60%, 88%)`,
+    color: `hsl(${hue}, 50%, 32%)`,
+  };
+}
+
+const tagPillStyle: React.CSSProperties = {
+  display: 'inline-flex',
+  alignItems: 'center',
+  gap: 4,
+  fontSize: 13,
+  fontWeight: 500,
+  padding: '2px 7px 2px 9px',
+  borderRadius: 11,
+  whiteSpace: 'nowrap',
+};
+
+const tagRemoveButtonStyle: React.CSSProperties = {
+  background: 'none',
+  border: 'none',
+  cursor: 'pointer',
+  color: 'var(--text-secondary)',
+  fontSize: 16,
+  lineHeight: 1,
+  padding: 0,
+  display: 'flex',
+  alignItems: 'center',
+};
+
 
 const todoImageOverlayStyle: React.CSSProperties = {
   position: 'fixed',

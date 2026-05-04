@@ -73,6 +73,7 @@ export interface TodoItem {
   walkthrough_item_id: string | null;
   image_urls: string[] | undefined;
   priority: number | null;
+  tags: string[];
   created_at: string;
   updated_at: string;
 }
