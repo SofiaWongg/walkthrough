@@ -40,6 +40,7 @@ export default function WalkthroughPage() {
   const pendingTextRef = useRef('');
   const currentTextRef = useRef('');
   const silenceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const typingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const recognitionRef = useRef<SpeechRecognition | null>(null);
   const isListeningRef = useRef(false);
 
@@ -147,10 +148,27 @@ export default function WalkthroughPage() {
       clearTimeout(silenceTimerRef.current);
       silenceTimerRef.current = null;
     }
+    if (typingTimerRef.current) {
+      clearTimeout(typingTimerRef.current);
+      typingTimerRef.current = null;
+    }
     if (recognitionRef.current) {
       recognitionRef.current.stop();
       recognitionRef.current = null;
     }
+  };
+
+  const handleTypingChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    const value = e.target.value;
+    currentTextRef.current = value;
+    pendingTextRef.current = value;
+    setCurrentText(value);
+
+    if (typingTimerRef.current) clearTimeout(typingTimerRef.current);
+    typingTimerRef.current = setTimeout(() => {
+      const text = pendingTextRef.current.trim();
+      if (text) void doSendChunk(text);
+    }, 3000);
   };
 
   useEffect(() => {
@@ -322,8 +340,8 @@ export default function WalkthroughPage() {
             {isSending
               ? 'Processing transcript...'
               : isListening
-              ? 'Recording — speak now'
-              : 'Microphone paused'}
+              ? 'Recording — speak or type below'
+              : 'Microphone paused — type your notes below'}
           </div>
         </div>
       </div>
@@ -384,24 +402,28 @@ export default function WalkthroughPage() {
           </div>
         )}
 
-        <div
+        <textarea
+          value={currentText}
+          onChange={handleTypingChange}
+          disabled={isSending}
+          placeholder={isListening ? 'Listening… start speaking or type here.' : 'Type your notes here…'}
           style={{
             background: 'var(--card)',
             border: '1px solid var(--border)',
             borderRadius: 'var(--radius)',
             padding: 16,
             minHeight: 100,
+            width: '100%',
+            boxSizing: 'border-box',
             fontSize: 15,
             lineHeight: 1.7,
             whiteSpace: 'pre-wrap',
+            resize: 'none',
+            fontFamily: 'inherit',
+            color: 'var(--text)',
+            outline: 'none',
           }}
-        >
-          {currentText || (
-            <span style={{ color: 'var(--text-secondary)' }}>
-              {isListening ? 'Listening… start speaking.' : 'Waiting for microphone…'}
-            </span>
-          )}
-        </div>
+        />
       </div>
 
       {/* Checklist Panel */}
