@@ -155,6 +155,10 @@ export default function WalkthroughPage() {
 
   const handleTypingChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const value = e.target.value;
+
+    // Pause speech recognition on the first keystroke so the two modes don't conflict
+    if (isListeningRef.current) stopListening();
+
     currentTextRef.current = value;
     pendingTextRef.current = value;
     setCurrentText(value);
@@ -162,7 +166,8 @@ export default function WalkthroughPage() {
     if (pauseTimerRef.current) clearTimeout(pauseTimerRef.current);
     pauseTimerRef.current = setTimeout(() => {
       const text = pendingTextRef.current.trim();
-      if (text) void doSendChunk(text);
+      const send = text ? doSendChunk(text) : Promise.resolve(null);
+      void send.then(() => startListening());
     }, 3000);
   };
 
