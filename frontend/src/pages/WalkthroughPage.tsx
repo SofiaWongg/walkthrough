@@ -353,6 +353,7 @@ export default function WalkthroughPage() {
       <div
         style={{
           flex: 1,
+          minHeight: 0,
           overflowY: 'auto',
           padding: 16,
           background: 'var(--bg)',
