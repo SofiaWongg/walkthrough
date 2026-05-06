@@ -20,6 +20,7 @@ export default function WalkthroughPage() {
   );
   const [currentText, setCurrentText] = useState('');
   const [isListening, setIsListening] = useState(false);
+  const [isPaused, setIsPaused] = useState(false);
   const [isSending, setIsSending] = useState(false);
   const [endStep, setEndStep] = useState<EndStep>(0);
   const [editableItems, setEditableItems] = useState<WalkthroughItem[]>([]);
@@ -168,6 +169,16 @@ export default function WalkthroughPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [!!walkthrough]);
 
+  const handlePause = () => {
+    stopListening();
+    setIsPaused(true);
+  };
+
+  const handleResume = () => {
+    setIsPaused(false);
+    startListening();
+  };
+
   const handleEndClick = async () => {
     stopListening();
 
@@ -201,6 +212,7 @@ export default function WalkthroughPage() {
   const handleGoBack = () => {
     setDeletedBaseItems([]);
     setEndStep(0);
+    setIsPaused(false);
     startListening();
   };
 
@@ -342,9 +354,11 @@ export default function WalkthroughPage() {
           <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
             {isSending
               ? 'Processing transcript...'
+              : isPaused
+              ? 'Dictation paused'
               : isListening
               ? 'Recording — speak now'
-              : 'Microphone paused'}
+              : 'Waiting for microphone…'}
           </div>
         </div>
       </div>
@@ -419,7 +433,11 @@ export default function WalkthroughPage() {
         >
           {currentText || (
             <span style={{ color: 'var(--text-secondary)' }}>
-              {isListening ? 'Listening… start speaking.' : 'Waiting for microphone…'}
+              {isPaused
+                ? 'Dictation is paused. Press play to resume.'
+                : isListening
+                ? 'Listening… start speaking.'
+                : 'Waiting for microphone…'}
             </span>
           )}
         </div>
@@ -539,13 +557,59 @@ export default function WalkthroughPage() {
             <circle cx="12" cy="13" r="4"/>
           </svg>
         </button>
+        {endStep === 0 && (
+          isPaused ? (
+            <button
+              onClick={handleResume}
+              title="Resume dictation"
+              style={{
+                padding: '13px 16px',
+                background: '#16a34a',
+                border: 'none',
+                borderRadius: 'var(--radius)',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                flexShrink: 0,
+              }}
+            >
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="white">
+                <polygon points="5,3 19,12 5,21" />
+              </svg>
+            </button>
+          ) : (
+            <button
+              onClick={handlePause}
+              disabled={isSending}
+              title="Pause dictation"
+              style={{
+                padding: '13px 16px',
+                background: 'var(--red)',
+                border: 'none',
+                borderRadius: 'var(--radius)',
+                cursor: isSending ? 'not-allowed' : 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                flexShrink: 0,
+                opacity: isSending ? 0.5 : 1,
+              }}
+            >
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="white">
+                <rect x="5" y="4" width="4" height="16" rx="1" />
+                <rect x="15" y="4" width="4" height="16" rx="1" />
+              </svg>
+            </button>
+          )
+        )}
         <button
           onClick={handleEndClick}
           disabled={isSending}
           style={{
             flex: 1,
             padding: 13,
-            background: isSending ? '#fca5a5' : 'var(--red)',
+            background: isSending ? '#fca5a5' : '#1e293b',
             color: 'white',
             border: 'none',
             borderRadius: 'var(--radius)',
