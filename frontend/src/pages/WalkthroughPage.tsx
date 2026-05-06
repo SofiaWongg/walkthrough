@@ -39,8 +39,7 @@ export default function WalkthroughPage() {
   const currentSendRef = useRef<Promise<Walkthrough | null>>(Promise.resolve(null));
   const pendingTextRef = useRef('');
   const currentTextRef = useRef('');
-  const silenceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const typingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pauseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const recognitionRef = useRef<SpeechRecognition | null>(null);
   const isListeningRef = useRef(false);
 
@@ -112,8 +111,8 @@ export default function WalkthroughPage() {
       currentTextRef.current = fullText;
       setCurrentText(fullText);
 
-      if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
-      silenceTimerRef.current = setTimeout(() => {
+      if (pauseTimerRef.current) clearTimeout(pauseTimerRef.current);
+      pauseTimerRef.current = setTimeout(() => {
         const text = pendingTextRef.current.trim();
         if (text) void doSendChunk(text);
       }, 5000);
@@ -144,13 +143,9 @@ export default function WalkthroughPage() {
   const stopListening = () => {
     isListeningRef.current = false;
     setIsListening(false);
-    if (silenceTimerRef.current) {
-      clearTimeout(silenceTimerRef.current);
-      silenceTimerRef.current = null;
-    }
-    if (typingTimerRef.current) {
-      clearTimeout(typingTimerRef.current);
-      typingTimerRef.current = null;
+    if (pauseTimerRef.current) {
+      clearTimeout(pauseTimerRef.current);
+      pauseTimerRef.current = null;
     }
     if (recognitionRef.current) {
       recognitionRef.current.stop();
@@ -164,8 +159,8 @@ export default function WalkthroughPage() {
     pendingTextRef.current = value;
     setCurrentText(value);
 
-    if (typingTimerRef.current) clearTimeout(typingTimerRef.current);
-    typingTimerRef.current = setTimeout(() => {
+    if (pauseTimerRef.current) clearTimeout(pauseTimerRef.current);
+    pauseTimerRef.current = setTimeout(() => {
       const text = pendingTextRef.current.trim();
       if (text) void doSendChunk(text);
     }, 3000);
