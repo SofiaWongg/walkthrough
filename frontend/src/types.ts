@@ -74,6 +74,7 @@ export interface TodoItem {
   image_urls: string[] | undefined;
   priority: number | null;
   tags: string[];
+  sort_order: number;
   created_at: string;
   updated_at: string;
 }

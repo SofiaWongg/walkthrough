@@ -19,6 +19,7 @@ class TodoItem(BaseModel):
     image_urls: list[str] = []
     priority: Optional[TodoItemPriority] = None
     tags: list[str] = []
+    sort_order: int = 0
     created_at: datetime
     updated_at: datetime
 
@@ -40,3 +41,8 @@ class TodoItemUpdate(BaseModel):
 class BulkAddFromWalkthroughRequest(BaseModel):
     walkthrough_id: str
     walkthrough_item_ids: Optional[list[str]] = None  # if None, imports all items
+
+
+class TodoItemReorderEntry(BaseModel):
+    id: str
+    sort_order: int

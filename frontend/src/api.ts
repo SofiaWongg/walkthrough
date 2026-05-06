@@ -11,6 +11,7 @@ async function req<T>(path: string, options?: RequestInit): Promise<T> {
     const body = await res.json().catch(() => ({})) as { detail?: string };
     throw new Error(body.detail ?? `HTTP ${res.status}`);
   }
+  if (res.status === 204) return undefined as T;
   return res.json() as Promise<T>;
 }
 
@@ -89,6 +90,12 @@ export const api = {
   deleteTodoItem: (id: string) =>
     req<void>(`/todo_items/${id}`, {
       method: 'DELETE',
+    }),
+
+  reorderTodoItems: (items: { id: string; sort_order: number }[]) =>
+    req<void>('/todo_items/reorder', {
+      method: 'POST',
+      body: JSON.stringify(items),
     }),
 
   listTags: () => req<string[]>('/tags/'),
