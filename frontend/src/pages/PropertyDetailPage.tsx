@@ -17,6 +17,8 @@ export default function PropertyDetailPage() {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
+  const activeWalkthrough = property?.walkthroughs.find((w) => w.status === 'active') ?? null;
+
   useEffect(() => {
     if (!propertyId) return;
     api
@@ -41,6 +43,10 @@ export default function PropertyDetailPage() {
 
   const handleStartWalkthrough = async () => {
     if (!propertyId || starting) return;
+    if (activeWalkthrough) {
+      navigate(`/walkthroughs/${activeWalkthrough.id}`);
+      return;
+    }
     setStarting(true);
     try {
       const walkthrough = await api.startWalkthrough(propertyId);
@@ -81,7 +87,7 @@ export default function PropertyDetailPage() {
         style={{
           width: '100%',
           padding: 14,
-          background: starting ? '#93c5fd' : 'var(--primary)',
+          background: starting ? '#93c5fd' : activeWalkthrough ? '#10b981' : 'var(--primary)',
           color: 'white',
           border: 'none',
           borderRadius: 'var(--radius)',
@@ -91,7 +97,7 @@ export default function PropertyDetailPage() {
           marginBottom: 24,
         }}
       >
-        {starting ? 'Starting...' : 'Start Walkthrough'}
+        {starting ? 'Starting...' : activeWalkthrough ? 'Resume Walkthrough' : 'Start Walkthrough'}
       </button>
 
       {/* Base Checklist */}
