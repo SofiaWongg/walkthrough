@@ -44,10 +44,29 @@ export default function WalkthroughPage() {
   const silenceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const recognitionRef = useRef<SpeechRecognition | null>(null);
   const isListeningRef = useRef(false);
+  const transcriptionRef = useRef<HTMLDivElement>(null);
+  const isPinnedRef = useRef(true);
 
   useEffect(() => {
     walkthroughRef.current = walkthrough;
   }, [walkthrough]);
+
+  useEffect(() => {
+    const el = transcriptionRef.current;
+    if (!el) return;
+    if (currentText === '') {
+      isPinnedRef.current = true;
+    }
+    if (isPinnedRef.current) {
+      el.scrollTop = el.scrollHeight;
+    }
+  }, [currentText]);
+
+  const handleTranscriptionScroll = () => {
+    const el = transcriptionRef.current;
+    if (!el) return;
+    isPinnedRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 20;
+  };
 
   useEffect(() => {
     if (!initWalkthrough && walkthroughId) {
@@ -367,9 +386,12 @@ export default function WalkthroughPage() {
       <div
         style={{
           flex: 1,
-          overflowY: 'auto',
+          minHeight: 0,
+          display: 'flex',
+          flexDirection: 'column',
           padding: 16,
           background: 'var(--bg)',
+          overflow: 'hidden',
         }}
       >
         {error && (
@@ -385,6 +407,7 @@ export default function WalkthroughPage() {
               justifyContent: 'space-between',
               alignItems: 'flex-start',
               gap: 8,
+              flexShrink: 0,
             }}
           >
             <span>{error}</span>
@@ -413,33 +436,50 @@ export default function WalkthroughPage() {
               borderRadius: 'var(--radius)',
               marginBottom: 12,
               fontSize: 14,
+              flexShrink: 0,
             }}
           >
             Speech recognition is not supported in this browser. Please use Chrome.
           </div>
         )}
 
+        {/* Text box — scrolls internally so the border never moves */}
         <div
+          ref={transcriptionRef}
+          onScroll={handleTranscriptionScroll}
           style={{
+            flex: 1,
+            minHeight: 0,
             background: 'var(--card)',
             border: '1px solid var(--border)',
             borderRadius: 'var(--radius)',
-            padding: 16,
-            minHeight: 100,
-            fontSize: 15,
-            lineHeight: 1.7,
-            whiteSpace: 'pre-wrap',
+            overflowY: 'auto',
+            position: 'relative',
           }}
         >
-          {currentText || (
-            <span style={{ color: 'var(--text-secondary)' }}>
-              {isPaused
-                ? 'Dictation is paused. Press play to resume.'
-                : isListening
-                ? 'Listening… start speaking.'
-                : 'Waiting for microphone…'}
-            </span>
-          )}
+          {/* Gradient fades only the text at the top, inside the border */}
+          <div
+            style={{
+              position: 'sticky',
+              top: 0,
+              height: 48,
+              background: 'linear-gradient(to bottom, var(--card) 0%, transparent 100%)',
+              pointerEvents: 'none',
+              zIndex: 1,
+              marginBottom: -48,
+            }}
+          />
+          <div style={{ padding: 16, fontSize: 15, lineHeight: 1.7, whiteSpace: 'pre-wrap' }}>
+            {currentText || (
+              <span style={{ color: 'var(--text-secondary)' }}>
+                {isPaused
+                  ? 'Dictation is paused. Press play to resume.'
+                  : isListening
+                  ? 'Listening… start speaking.'
+                  : 'Waiting for microphone…'}
+              </span>
+            )}
+          </div>
         </div>
       </div>
 
