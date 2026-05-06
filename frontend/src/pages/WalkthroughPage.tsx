@@ -372,29 +372,16 @@ export default function WalkthroughPage() {
 
       {/* Transcription Area */}
       <div
-        ref={transcriptionRef}
         style={{
           flex: 1,
           minHeight: 0,
-          overflowY: 'auto',
+          display: 'flex',
+          flexDirection: 'column',
           padding: 16,
           background: 'var(--bg)',
-          position: 'relative',
+          overflow: 'hidden',
         }}
       >
-        <div
-          style={{
-            position: 'sticky',
-            top: 0,
-            left: 0,
-            right: 0,
-            height: 64,
-            background: 'linear-gradient(to bottom, var(--bg) 0%, transparent 100%)',
-            pointerEvents: 'none',
-            zIndex: 1,
-            marginBottom: -64,
-          }}
-        />
         {error && (
           <div
             style={{
@@ -408,6 +395,7 @@ export default function WalkthroughPage() {
               justifyContent: 'space-between',
               alignItems: 'flex-start',
               gap: 8,
+              flexShrink: 0,
             }}
           >
             <span>{error}</span>
@@ -436,33 +424,49 @@ export default function WalkthroughPage() {
               borderRadius: 'var(--radius)',
               marginBottom: 12,
               fontSize: 14,
+              flexShrink: 0,
             }}
           >
             Speech recognition is not supported in this browser. Please use Chrome.
           </div>
         )}
 
+        {/* Text box — scrolls internally so the border never moves */}
         <div
+          ref={transcriptionRef}
           style={{
+            flex: 1,
+            minHeight: 0,
             background: 'var(--card)',
             border: '1px solid var(--border)',
             borderRadius: 'var(--radius)',
-            padding: 16,
-            minHeight: 100,
-            fontSize: 15,
-            lineHeight: 1.7,
-            whiteSpace: 'pre-wrap',
+            overflowY: 'auto',
+            position: 'relative',
           }}
         >
-          {currentText || (
-            <span style={{ color: 'var(--text-secondary)' }}>
-              {isPaused
-                ? 'Dictation is paused. Press play to resume.'
-                : isListening
-                ? 'Listening… start speaking.'
-                : 'Waiting for microphone…'}
-            </span>
-          )}
+          {/* Gradient fades only the text at the top, inside the border */}
+          <div
+            style={{
+              position: 'sticky',
+              top: 0,
+              height: 48,
+              background: 'linear-gradient(to bottom, var(--card) 0%, transparent 100%)',
+              pointerEvents: 'none',
+              zIndex: 1,
+              marginBottom: -48,
+            }}
+          />
+          <div style={{ padding: 16, fontSize: 15, lineHeight: 1.7, whiteSpace: 'pre-wrap' }}>
+            {currentText || (
+              <span style={{ color: 'var(--text-secondary)' }}>
+                {isPaused
+                  ? 'Dictation is paused. Press play to resume.'
+                  : isListening
+                  ? 'Listening… start speaking.'
+                  : 'Waiting for microphone…'}
+              </span>
+            )}
+          </div>
         </div>
       </div>
 
