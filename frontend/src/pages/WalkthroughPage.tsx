@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import type { Walkthrough, WalkthroughItem } from '../types';
 import { api } from '../api';
@@ -23,6 +23,7 @@ export default function WalkthroughPage() {
   const [isSending, setIsSending] = useState(false);
   const [endStep, setEndStep] = useState<EndStep>(0);
   const [editableItems, setEditableItems] = useState<WalkthroughItem[]>([]);
+  const [deletedBaseItems, setDeletedBaseItems] = useState<WalkthroughItem[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [isEnding, setIsEnding] = useState(false);
   const [speechSupported, setSpeechSupported] = useState(true);
@@ -190,6 +191,7 @@ export default function WalkthroughPage() {
   };
 
   const handleGoBack = () => {
+    setDeletedBaseItems([]);
     setEndStep(0);
     startListening();
   };
@@ -197,6 +199,7 @@ export default function WalkthroughPage() {
   const handleContinue = () => {
     const items = walkthroughRef.current?.item_list ?? [];
     setEditableItems([...items]);
+    setDeletedBaseItems([]);
     setEndStep(2);
   };
 
@@ -206,7 +209,7 @@ export default function WalkthroughPage() {
     try {
       await api.endWalkthrough(walkthrough.id, {
         ...walkthrough,
-        item_list: editableItems,
+        item_list: [...editableItems, ...deletedBaseItems.map((i) => ({ ...i, status: 'unchecked' as const }))],
       });
       navigate(`/properties/${walkthrough.property_id}`, { replace: true });
     } catch (e) {
@@ -222,7 +225,13 @@ export default function WalkthroughPage() {
   };
 
   const deleteEditableItem = (id: string) => {
-    setEditableItems((items) => items.filter((item) => item.id !== id));
+    setEditableItems((items) => {
+      const item = items.find((i) => i.id === id);
+      if (item?.is_from_base) {
+        setDeletedBaseItems((prev) => [...prev, item]);
+      }
+      return items.filter((i) => i.id !== id);
+    });
   };
 
   const stopStream = () => {
@@ -747,6 +756,12 @@ function ReviewItemRow({
   onUpdate: (updates: Partial<WalkthroughItem>) => void;
   onDelete: () => void;
 }) {
+  const isTouchDevice = useMemo(
+    () => typeof window !== 'undefined' && ('ontouchstart' in window || navigator.maxTouchPoints > 0),
+    []
+  );
+  const [hovered, setHovered] = useState(false);
+  const [deleteHovered, setDeleteHovered] = useState(false);
   const touchStartX = useRef<number>(0);
   const touchCurrentX = useRef<number>(0);
   const [dragOffset, setDragOffset] = useState(0);
@@ -790,8 +805,11 @@ function ReviewItemRow({
         marginBottom: 12,
         borderBottom: '1px solid var(--border)',
       }}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => { setHovered(false); setDeleteHovered(false); }}
     >
-      {offset > 0 && (
+      {/* Touch: swipe-reveal delete button */}
+      {isTouchDevice && offset > 0 && (
         <div
           style={{
             position: 'absolute',
@@ -821,7 +839,7 @@ function ReviewItemRow({
 
       <div
         style={{
-          transform: `translateX(-${offset}px)`,
+          transform: isTouchDevice ? `translateX(-${offset}px)` : 'none',
           transition: dragOffset === 0 || dragOffset === 80 ? 'transform 0.2s' : 'none',
           paddingBottom: 12,
           background: 'var(--card)',
@@ -847,6 +865,27 @@ function ReviewItemRow({
             <span style={{ fontSize: 11, color: 'var(--text-secondary)', flexShrink: 0 }}>
               base
             </span>
+          )}
+          {/* Desktop: delete button on hover */}
+          {!isTouchDevice && (
+            <button
+              onClick={onDelete}
+              onMouseEnter={() => setDeleteHovered(true)}
+              onMouseLeave={() => setDeleteHovered(false)}
+              style={{
+                flexShrink: 0,
+                border: 'none',
+                background: 'transparent',
+                color: deleteHovered ? 'var(--red)' : 'var(--text-secondary)',
+                fontSize: 13,
+                cursor: 'pointer',
+                padding: '2px 4px',
+                opacity: hovered ? 1 : 0,
+                transition: 'opacity 0.1s, color 0.1s',
+              }}
+            >
+              Delete
+            </button>
           )}
         </div>
         <input
