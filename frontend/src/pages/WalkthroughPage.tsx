@@ -92,52 +92,60 @@ export default function WalkthroughPage() {
       return;
     }
 
-    const recognition = new SR() as SpeechRecognition;
-    recognition.continuous = true;
-    recognition.interimResults = true;
-    recognition.lang = 'en-US';
+    // Android Chrome re-delivers previous results when .start() is called on the
+    // same instance after onend fires, causing 2-3x duplication. Always create a
+    // fresh instance on each session restart to avoid this.
+    const createAndStart = () => {
+      const recognition = new SR() as SpeechRecognition;
+      recognition.continuous = true;
+      recognition.interimResults = true;
+      recognition.lang = 'en-US';
 
-    recognition.onresult = (event: SpeechRecognitionEvent) => {
-      let interim = '';
-      for (let i = event.resultIndex; i < event.results.length; i++) {
-        const result = event.results[i];
-        if (result.isFinal) {
-          pendingTextRef.current += result[0].transcript + ' ';
-        } else {
-          interim += result[0].transcript;
+      recognition.onresult = (event: SpeechRecognitionEvent) => {
+        let interim = '';
+        for (let i = event.resultIndex; i < event.results.length; i++) {
+          const result = event.results[i];
+          if (result.isFinal) {
+            pendingTextRef.current += result[0].transcript + ' ';
+          } else {
+            interim += result[0].transcript;
+          }
         }
-      }
-      const fullText = pendingTextRef.current + interim;
-      currentTextRef.current = fullText;
-      setCurrentText(fullText);
+        const fullText = pendingTextRef.current + interim;
+        currentTextRef.current = fullText;
+        setCurrentText(fullText);
 
-      if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
-      silenceTimerRef.current = setTimeout(() => {
-        const text = pendingTextRef.current.trim();
-        if (text) void doSendChunk(text);
-      }, 5000);
-    };
+        if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
+        silenceTimerRef.current = setTimeout(() => {
+          const text = pendingTextRef.current.trim();
+          if (text) void doSendChunk(text);
+        }, 5000);
+      };
 
-    recognition.onend = () => {
-      if (isListeningRef.current && recognitionRef.current === recognition) {
-        try {
-          recognition.start();
-        } catch {
-          // ignore restart errors
+      recognition.onend = () => {
+        if (isListeningRef.current && recognitionRef.current === recognition) {
+          recognitionRef.current = null;
+          createAndStart();
         }
+      };
+
+      recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
+        if (event.error !== 'no-speech' && event.error !== 'aborted') {
+          setError(`Microphone error: ${event.error}`);
+        }
+      };
+
+      recognitionRef.current = recognition;
+      try {
+        recognition.start();
+      } catch {
+        // ignore start errors
       }
     };
 
-    recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
-      if (event.error !== 'no-speech' && event.error !== 'aborted') {
-        setError(`Microphone error: ${event.error}`);
-      }
-    };
-
-    recognitionRef.current = recognition;
     isListeningRef.current = true;
     setIsListening(true);
-    recognition.start();
+    createAndStart();
   };
 
   const stopListening = () => {
