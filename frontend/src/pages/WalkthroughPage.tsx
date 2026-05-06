@@ -62,18 +62,12 @@ export default function WalkthroughPage() {
     }
     isSendingRef.current = true;
     setIsSending(true);
-    const sentText = text.trim();
     const promise = api
-      .addTranscriptChunk(walkthroughRef.current.id, sentText)
+      .addTranscriptChunk(walkthroughRef.current.id, text.trim())
       .then((updated) => {
-        // Preserve any text that accumulated (speech or typing) while the request was in flight
-        const accumulated = pendingTextRef.current;
-        const remaining = accumulated.startsWith(sentText)
-          ? accumulated.slice(sentText.length).trimStart()
-          : '';
-        pendingTextRef.current = remaining;
-        currentTextRef.current = remaining;
-        setCurrentText(remaining);
+        pendingTextRef.current = '';
+        currentTextRef.current = '';
+        setCurrentText('');
         setWalkthrough(updated);
         return updated;
       })
@@ -105,13 +99,19 @@ export default function WalkthroughPage() {
 
     recognition.onresult = (event: SpeechRecognitionEvent) => {
       let interim = '';
+      let newFinal = '';
       for (let i = event.resultIndex; i < event.results.length; i++) {
         const result = event.results[i];
         if (result.isFinal) {
-          pendingTextRef.current += result[0].transcript + ' ';
+          newFinal += result[0].transcript + ' ';
         } else {
           interim += result[0].transcript;
         }
+      }
+      if (newFinal) {
+        const base = pendingTextRef.current;
+        const spacer = base.length > 0 && !base.endsWith(' ') ? ' ' : '';
+        pendingTextRef.current = base + spacer + newFinal;
       }
       const fullText = pendingTextRef.current + interim;
       currentTextRef.current = fullText;
