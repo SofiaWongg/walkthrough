@@ -44,10 +44,17 @@ export default function WalkthroughPage() {
   const silenceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const recognitionRef = useRef<SpeechRecognition | null>(null);
   const isListeningRef = useRef(false);
+  const transcriptionRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     walkthroughRef.current = walkthrough;
   }, [walkthrough]);
+
+  useEffect(() => {
+    if (transcriptionRef.current) {
+      transcriptionRef.current.scrollTop = transcriptionRef.current.scrollHeight;
+    }
+  }, [currentText]);
 
   useEffect(() => {
     if (!initWalkthrough && walkthroughId) {
@@ -365,13 +372,29 @@ export default function WalkthroughPage() {
 
       {/* Transcription Area */}
       <div
+        ref={transcriptionRef}
         style={{
           flex: 1,
+          minHeight: 0,
           overflowY: 'auto',
           padding: 16,
           background: 'var(--bg)',
+          position: 'relative',
         }}
       >
+        <div
+          style={{
+            position: 'sticky',
+            top: 0,
+            left: 0,
+            right: 0,
+            height: 64,
+            background: 'linear-gradient(to bottom, var(--bg) 0%, transparent 100%)',
+            pointerEvents: 'none',
+            zIndex: 1,
+            marginBottom: -64,
+          }}
+        />
         {error && (
           <div
             style={{
