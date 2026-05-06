@@ -45,16 +45,28 @@ export default function WalkthroughPage() {
   const recognitionRef = useRef<SpeechRecognition | null>(null);
   const isListeningRef = useRef(false);
   const transcriptionRef = useRef<HTMLDivElement>(null);
+  const isPinnedRef = useRef(true);
 
   useEffect(() => {
     walkthroughRef.current = walkthrough;
   }, [walkthrough]);
 
   useEffect(() => {
-    if (transcriptionRef.current) {
-      transcriptionRef.current.scrollTop = transcriptionRef.current.scrollHeight;
+    const el = transcriptionRef.current;
+    if (!el) return;
+    if (currentText === '') {
+      isPinnedRef.current = true;
+    }
+    if (isPinnedRef.current) {
+      el.scrollTop = el.scrollHeight;
     }
   }, [currentText]);
+
+  const handleTranscriptionScroll = () => {
+    const el = transcriptionRef.current;
+    if (!el) return;
+    isPinnedRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 20;
+  };
 
   useEffect(() => {
     if (!initWalkthrough && walkthroughId) {
@@ -434,6 +446,7 @@ export default function WalkthroughPage() {
         {/* Text box — scrolls internally so the border never moves */}
         <div
           ref={transcriptionRef}
+          onScroll={handleTranscriptionScroll}
           style={{
             flex: 1,
             minHeight: 0,
