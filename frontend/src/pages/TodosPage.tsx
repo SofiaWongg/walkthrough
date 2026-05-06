@@ -44,6 +44,11 @@ export default function TodosPage() {
   const [editText, setEditText] = useState('');
   const [viewImagesTodo, setViewImagesTodo] = useState<TodoItem | null>(null);
   const [showTagManager, setShowTagManager] = useState(false);
+  const [draggingId, setDraggingId] = useState<string | null>(null);
+  const [dropBeforeId, setDropBeforeId] = useState<string | 'end' | null>(null);
+  const itemRefs = useRef<Map<string, HTMLDivElement>>(new Map());
+  const incompleteTodosRef = useRef<TodoItem[]>([]);
+  const dropBeforeIdRef = useRef<string | 'end' | null>(null);
 
   useEffect(() => {
     Promise.all([api.listTodoItems(), api.listProperties(), api.listTags()])
@@ -173,19 +178,82 @@ export default function TodosPage() {
     return properties.find((p) => p.id === propertyId)?.name ?? 'Unknown';
   };
 
-  // Filter and sort todos
+  const handleDragHandlePointerDown = (id: string) => {
+    setDraggingId(id);
+    setDropBeforeId('end');
+    setSwipedTodoId(null);
+  };
+
+  useEffect(() => {
+    if (!draggingId) return;
+
+    const handleMove = (e: PointerEvent) => {
+      const clientY = e.clientY;
+      let found: string | 'end' = 'end';
+      for (const todo of incompleteTodosRef.current) {
+        const el = itemRefs.current.get(todo.id);
+        if (!el) continue;
+        const rect = el.getBoundingClientRect();
+        if (clientY < rect.top + rect.height / 2) {
+          found = todo.id;
+          break;
+        }
+      }
+      dropBeforeIdRef.current = found;
+      setDropBeforeId(found);
+    };
+
+    const handleUp = () => {
+      const dropTarget = dropBeforeIdRef.current;
+      const dragId = draggingId;
+      if (dragId && dropTarget !== null) {
+        const current = incompleteTodosRef.current;
+        const without = current.filter((t) => t.id !== dragId);
+        const dragged = current.find((t) => t.id === dragId)!;
+        if (dragged) {
+          const insertIdx = dropTarget === 'end' ? without.length : without.findIndex((t) => t.id === dropTarget);
+          const newOrder = [...without];
+          newOrder.splice(insertIdx === -1 ? without.length : insertIdx, 0, dragged);
+          const payload = newOrder.map((t, i) => ({ id: t.id, sort_order: (i + 1) * 1000 }));
+          setTodos((prev) => {
+            const byId = new Map(prev.map((t) => [t.id, t]));
+            payload.forEach(({ id, sort_order }) => {
+              const t = byId.get(id);
+              if (t) byId.set(id, { ...t, sort_order });
+            });
+            return Array.from(byId.values());
+          });
+          api.reorderTodoItems(payload).catch((e: unknown) => setError((e as Error).message));
+        }
+      }
+      setDraggingId(null);
+      setDropBeforeId(null);
+    };
+
+    document.addEventListener('pointermove', handleMove);
+    document.addEventListener('pointerup', handleUp);
+    return () => {
+      document.removeEventListener('pointermove', handleMove);
+      document.removeEventListener('pointerup', handleUp);
+    };
+  }, [draggingId]);
+
+  // Filter and sort todos — sort_order ASC, tiebreak created_at DESC
   const filteredTodos = todos
     .filter((t) => !filterPropertyId || t.property_id === filterPropertyId)
     .filter((t) => !filterTag || t.tags.includes(filterTag))
     .sort((a, b) => {
-      if (a.is_completed !== b.is_completed) {
-        return a.is_completed ? 1 : -1;
-      }
+      if (a.is_completed !== b.is_completed) return a.is_completed ? 1 : -1;
+      if (a.sort_order !== b.sort_order) return a.sort_order - b.sort_order;
       return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
     });
 
   const incompleteTodos = filteredTodos.filter((t) => !t.is_completed);
   const completedTodos = filteredTodos.filter((t) => t.is_completed);
+
+  // Keep ref in sync for drag handler closure
+  incompleteTodosRef.current = incompleteTodos;
+  dropBeforeIdRef.current = dropBeforeId;
 
   return (
     <div style={{ maxWidth: 600, margin: '0 auto', padding: '24px 16px' }}>
@@ -247,23 +315,40 @@ export default function TodosPage() {
                 }}
               />
             ) : (
-              <TodoCard
+              <div
                 key={todo.id}
-                todo={todo}
-                propertyName={getPropertyName(todo.property_id)}
-                allTags={allTags}
-                updating={updatingIds.has(todo.id)}
-                onToggle={() => handleToggleTodo(todo)}
-                isSwiped={swipedTodoId === todo.id}
-                onSwipe={(swiped) => setSwipedTodoId(swiped ? todo.id : null)}
-                onEdit={() => startEditing(todo)}
-                onDelete={() => handleDeleteTodo(todo.id)}
-                onViewImages={(todo.image_urls ?? []).length > 0 ? () => setViewImagesTodo(todo) : undefined}
-                onAddTag={(tag) => handleAddTagToTodo(todo, tag)}
-                onRemoveTag={(tag) => handleRemoveTagFromTodo(todo, tag)}
-              />
+                ref={(el) => {
+                  if (el) itemRefs.current.set(todo.id, el);
+                  else itemRefs.current.delete(todo.id);
+                }}
+                style={{
+                  borderTop: dropBeforeId === todo.id ? '2px solid var(--primary)' : '2px solid transparent',
+                  opacity: draggingId === todo.id ? 0.45 : 1,
+                  transition: 'opacity 0.1s',
+                }}
+              >
+                <TodoCard
+                  todo={todo}
+                  propertyName={getPropertyName(todo.property_id)}
+                  allTags={allTags}
+                  updating={updatingIds.has(todo.id)}
+                  onToggle={() => handleToggleTodo(todo)}
+                  isSwiped={swipedTodoId === todo.id}
+                  onSwipe={(swiped) => setSwipedTodoId(swiped ? todo.id : null)}
+                  onEdit={() => startEditing(todo)}
+                  onDelete={() => handleDeleteTodo(todo.id)}
+                  onViewImages={(todo.image_urls ?? []).length > 0 ? () => setViewImagesTodo(todo) : undefined}
+                  onAddTag={(tag) => handleAddTagToTodo(todo, tag)}
+                  onRemoveTag={(tag) => handleRemoveTagFromTodo(todo, tag)}
+                  onDragHandlePointerDown={() => handleDragHandlePointerDown(todo.id)}
+                />
+              </div>
             )
           ))}
+          {/* Drop indicator at end of list */}
+          {draggingId && dropBeforeId === 'end' && (
+            <div style={{ height: 2, background: 'var(--primary)', borderRadius: 1, margin: '0 0 2px' }} />
+          )}
 
           {/* Bottom "+ New Todo" - only show if there are incomplete todos */}
           {!addingTodo && incompleteTodos.length > 0 && (
@@ -309,6 +394,7 @@ export default function TodosPage() {
                       onViewImages={(todo.image_urls ?? []).length > 0 ? () => setViewImagesTodo(todo) : undefined}
                       onAddTag={(tag) => handleAddTagToTodo(todo, tag)}
                       onRemoveTag={(tag) => handleRemoveTagFromTodo(todo, tag)}
+                      onDragHandlePointerDown={() => {}}
                     />
                   )
                 ))}
@@ -363,6 +449,7 @@ interface TodoCardProps {
   onViewImages?: () => void;
   onAddTag: (tag: string) => void;
   onRemoveTag: (tag: string) => void;
+  onDragHandlePointerDown: () => void;
 }
 
 
@@ -379,6 +466,7 @@ function TodoCard({
   onViewImages,
   onAddTag,
   onRemoveTag,
+  onDragHandlePointerDown,
 }: TodoCardProps) {
   const [hovered, setHovered] = useState(false);
   const touchStartX = useRef<number>(0);
@@ -496,6 +584,29 @@ function TodoCard({
         onTouchEnd={handleTouchEnd}
       >
         <div style={{ ...rowStyle, padding: isTouchDevice ? '6px 8px' : '9px 12px' }}>
+          {/* Drag handle */}
+          <div
+            onPointerDown={(e) => {
+              e.preventDefault();
+              onDragHandlePointerDown();
+            }}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              width: 20,
+              flexShrink: 0,
+              cursor: 'grab',
+              color: 'var(--text-secondary)',
+              fontSize: 14,
+              opacity: 0.5,
+              userSelect: 'none',
+              touchAction: 'none',
+              marginRight: 2,
+            }}
+          >
+            ⠿
+          </div>
           {/* Left: flex column — line 1: [checkbox + text], line 2: [tags full width] */}
           <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minWidth: 0, gap: 5 }}>
             {/* Line 1 */}

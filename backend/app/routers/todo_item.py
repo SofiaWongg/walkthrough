@@ -5,6 +5,7 @@ from app.models.todo_item import (
     TodoItem,
     TodoItemCreate,
     TodoItemUpdate,
+    TodoItemReorderEntry,
     BulkAddFromWalkthroughRequest,
 )
 from app.services.todo_item import doc_to_todo_item, create_todos_from_walkthrough
@@ -39,6 +40,7 @@ def create_todo_item(body: TodoItemCreate):
         "walkthrough_item_id": body.walkthrough_item_id,
         "priority": body.priority,
         "tags": initial_tags,
+        "sort_order": 0,
         "created_at": firestore.SERVER_TIMESTAMP,
         "updated_at": firestore.SERVER_TIMESTAMP,
     })
@@ -84,3 +86,13 @@ def delete_todo_item(item_id: str):
     item = doc_to_todo_item(doc)
     doc_ref.delete()
     return item
+
+
+@router.post("/reorder", status_code=204)
+def reorder_todo_items(body: list[TodoItemReorderEntry]):
+    db = get_db()
+    batch = db.batch()
+    for entry in body:
+        ref = db.collection("todo_items").document(entry.id)
+        batch.update(ref, {"sort_order": entry.sort_order, "updated_at": firestore.SERVER_TIMESTAMP})
+    batch.commit()

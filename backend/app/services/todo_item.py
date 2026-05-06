@@ -13,6 +13,7 @@ def doc_to_todo_item(doc) -> TodoItem:
         image_urls=data.get("image_urls", []),
         priority=TodoItemPriority(data["priority"]) if data.get("priority") else None,
         tags=data.get("tags", []),
+        sort_order=data.get("sort_order", 0),
         created_at=data["created_at"],
         updated_at=data["updated_at"],
     )
