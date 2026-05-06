@@ -62,12 +62,18 @@ export default function WalkthroughPage() {
     }
     isSendingRef.current = true;
     setIsSending(true);
+    const sentText = text.trim();
     const promise = api
-      .addTranscriptChunk(walkthroughRef.current.id, text.trim())
+      .addTranscriptChunk(walkthroughRef.current.id, sentText)
       .then((updated) => {
-        pendingTextRef.current = '';
-        currentTextRef.current = '';
-        setCurrentText('');
+        // Preserve any text that accumulated (speech or typing) while the request was in flight
+        const accumulated = pendingTextRef.current;
+        const remaining = accumulated.startsWith(sentText)
+          ? accumulated.slice(sentText.length).trimStart()
+          : '';
+        pendingTextRef.current = remaining;
+        currentTextRef.current = remaining;
+        setCurrentText(remaining);
         setWalkthrough(updated);
         return updated;
       })
@@ -155,10 +161,6 @@ export default function WalkthroughPage() {
 
   const handleTypingChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const value = e.target.value;
-
-    // Pause speech recognition on the first keystroke so the two modes don't conflict
-    if (isListeningRef.current) stopListening();
-
     currentTextRef.current = value;
     pendingTextRef.current = value;
     setCurrentText(value);
@@ -166,8 +168,7 @@ export default function WalkthroughPage() {
     if (pauseTimerRef.current) clearTimeout(pauseTimerRef.current);
     pauseTimerRef.current = setTimeout(() => {
       const text = pendingTextRef.current.trim();
-      const send = text ? doSendChunk(text) : Promise.resolve(null);
-      void send.then(() => startListening());
+      if (text) void doSendChunk(text);
     }, 3000);
   };
 
