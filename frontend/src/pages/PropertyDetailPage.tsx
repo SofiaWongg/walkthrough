@@ -16,6 +16,8 @@ export default function PropertyDetailPage() {
   const [selectedBaseItem, setSelectedBaseItem] = useState<ChecklistItem | null>(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [editingChecklist, setEditingChecklist] = useState(false);
+  const [savingChecklist, setSavingChecklist] = useState(false);
 
   const activeWalkthrough = property?.walkthroughs.find((w) => w.status === 'active') ?? null;
 
@@ -27,6 +29,20 @@ export default function PropertyDetailPage() {
       .catch((e: unknown) => setError((e as Error).message))
       .finally(() => setLoading(false));
   }, [propertyId]);
+
+  const handleSaveChecklist = async (items: { name: string }[]) => {
+    if (!propertyId) return;
+    setSavingChecklist(true);
+    try {
+      const updated = await api.updateBaseChecklist(propertyId, items);
+      setProperty((prev) => prev ? { ...prev, base_checklist: updated } : prev);
+      setEditingChecklist(false);
+    } catch (e: unknown) {
+      setError((e as Error).message);
+    } finally {
+      setSavingChecklist(false);
+    }
+  };
 
   const handleDeleteProperty = async () => {
     if (!propertyId || deleting) return;
@@ -101,72 +117,108 @@ export default function PropertyDetailPage() {
       </button>
 
       {/* Base Checklist */}
-      {property.base_checklist && (
-        <div style={{ marginBottom: 28 }}>
+      <div style={{ marginBottom: 28 }}>
+        {property.base_checklist ? (
+          <>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 0 }}>
+              <button
+                onClick={() => setChecklistOpen((o) => !o)}
+                style={{
+                  flex: 1,
+                  padding: '12px 16px',
+                  background: 'var(--card)',
+                  border: '1px solid var(--border)',
+                  borderRadius: checklistOpen ? 'var(--radius) 0 0 0' : 'var(--radius) 0 0 var(--radius)',
+                  textAlign: 'left',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  fontWeight: 600,
+                  fontSize: 15,
+                }}
+              >
+                <span>Base Checklist ({property.base_checklist.item_list.length} items)</span>
+                <span style={{ color: 'var(--text-secondary)' }}>{checklistOpen ? '▲' : '▼'}</span>
+              </button>
+              <button
+                onClick={() => setEditingChecklist(true)}
+                style={{
+                  padding: '12px 16px',
+                  background: 'var(--card)',
+                  border: '1px solid var(--border)',
+                  borderLeft: 'none',
+                  borderRadius: checklistOpen ? '0 var(--radius) 0 0' : '0 var(--radius) var(--radius) 0',
+                  cursor: 'pointer',
+                  fontSize: 14,
+                  fontWeight: 500,
+                  color: 'var(--primary)',
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                Edit
+              </button>
+            </div>
+
+            {checklistOpen && (
+              <div
+                style={{
+                  background: 'var(--card)',
+                  border: '1px solid var(--border)',
+                  borderTop: 'none',
+                  borderRadius: '0 0 var(--radius) var(--radius)',
+                  maxHeight: 260,
+                  overflowY: 'auto',
+                }}
+              >
+                {property.base_checklist.item_list.length === 0 ? (
+                  <div style={emptyStyle}>No items in base checklist.</div>
+                ) : (
+                  property.base_checklist.item_list.map((item) => (
+                    <button
+                      key={item.id}
+                      onClick={() => setSelectedBaseItem(item)}
+                      style={{
+                        width: '100%',
+                        padding: '10px 16px',
+                        background: 'none',
+                        border: 'none',
+                        borderBottom: '1px solid var(--border)',
+                        textAlign: 'left',
+                        cursor: 'pointer',
+                        fontSize: 14,
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                      }}
+                    >
+                      <span>{item.name}</span>
+                      <span style={{ color: 'var(--text-secondary)', fontSize: 13 }}>History ›</span>
+                    </button>
+                  ))
+                )}
+              </div>
+            )}
+          </>
+        ) : (
           <button
-            onClick={() => setChecklistOpen((o) => !o)}
+            onClick={() => setEditingChecklist(true)}
             style={{
               width: '100%',
               padding: '12px 16px',
               background: 'var(--card)',
-              border: '1px solid var(--border)',
-              borderRadius: checklistOpen
-                ? 'var(--radius) var(--radius) 0 0'
-                : 'var(--radius)',
-              textAlign: 'left',
+              border: '1px dashed var(--border)',
+              borderRadius: 'var(--radius)',
               cursor: 'pointer',
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              fontWeight: 600,
-              fontSize: 15,
+              fontSize: 14,
+              color: 'var(--primary)',
+              fontWeight: 500,
             }}
           >
-            <span>Base Checklist ({property.base_checklist.item_list.length} items)</span>
-            <span style={{ color: 'var(--text-secondary)' }}>{checklistOpen ? '▲' : '▼'}</span>
+            + Set up base checklist
           </button>
-
-          {checklistOpen && (
-            <div
-              style={{
-                background: 'var(--card)',
-                border: '1px solid var(--border)',
-                borderTop: 'none',
-                borderRadius: '0 0 var(--radius) var(--radius)',
-                maxHeight: 260,
-                overflowY: 'auto',
-              }}
-            >
-              {property.base_checklist.item_list.length === 0 ? (
-                <div style={emptyStyle}>No items in base checklist.</div>
-              ) : (
-                property.base_checklist.item_list.map((item) => (
-                  <button
-                    key={item.id}
-                    onClick={() => setSelectedBaseItem(item)}
-                    style={{
-                      width: '100%',
-                      padding: '10px 16px',
-                      background: 'none',
-                      border: 'none',
-                      borderBottom: '1px solid var(--border)',
-                      textAlign: 'left',
-                      cursor: 'pointer',
-                      fontSize: 14,
-                      display: 'flex',
-                      justifyContent: 'space-between',
-                      alignItems: 'center',
-                    }}
-                  >
-                    <span>{item.name}</span>
-                    <span style={{ color: 'var(--text-secondary)', fontSize: 13 }}>History ›</span>
-                  </button>
-                ))
-              )}
-            </div>
-          )}
-        </div>
-      )}
+        )}
+      </div>
 
       {/* Past Walkthroughs */}
       <h2 style={{ fontSize: 18, fontWeight: 600, marginBottom: 12 }}>Past Walkthroughs</h2>
@@ -231,6 +283,16 @@ export default function PropertyDetailPage() {
           Delete Property
         </button>
       </div>
+
+      {/* Edit Base Checklist Modal */}
+      {editingChecklist && (
+        <EditBaseChecklistModal
+          initialItems={property.base_checklist?.item_list ?? []}
+          saving={savingChecklist}
+          onSave={handleSaveChecklist}
+          onClose={() => setEditingChecklist(false)}
+        />
+      )}
 
       {/* Walkthrough Detail Modal */}
       {selectedWalkthrough && (
@@ -300,6 +362,149 @@ export default function PropertyDetailPage() {
         </BottomSheet>
       )}
     </div>
+  );
+}
+
+function EditBaseChecklistModal({
+  initialItems,
+  saving,
+  onSave,
+  onClose,
+}: {
+  initialItems: ChecklistItem[];
+  saving: boolean;
+  onSave: (items: { name: string }[]) => void;
+  onClose: () => void;
+}) {
+  const [items, setItems] = useState<{ id: string; name: string }[]>(
+    initialItems.map((i) => ({ id: i.id, name: i.name }))
+  );
+
+  const addItem = () => {
+    setItems((prev) => [...prev, { id: `new-${Date.now()}`, name: '' }]);
+  };
+
+  const updateItem = (id: string, name: string) => {
+    setItems((prev) => prev.map((i) => (i.id === id ? { ...i, name } : i)));
+  };
+
+  const removeItem = (id: string) => {
+    setItems((prev) => prev.filter((i) => i.id !== id));
+  };
+
+  const handleSave = () => {
+    const trimmed = items.map((i) => ({ name: i.name.trim() })).filter((i) => i.name.length > 0);
+    onSave(trimmed);
+  };
+
+  return (
+    <BottomSheet onClose={!saving ? onClose : () => {}}>
+      <h2 style={sheetTitleStyle}>Edit Base Checklist</h2>
+
+      <div style={{ maxHeight: 380, overflowY: 'auto', marginBottom: 16 }}>
+        {items.length === 0 && (
+          <p style={{ color: 'var(--text-secondary)', fontSize: 14, marginBottom: 12 }}>
+            No items yet. Add some below.
+          </p>
+        )}
+        {items.map((item, index) => (
+          <div
+            key={item.id}
+            style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}
+          >
+            <span style={{ color: 'var(--text-secondary)', fontSize: 13, minWidth: 20 }}>
+              {index + 1}.
+            </span>
+            <input
+              type="text"
+              value={item.name}
+              onChange={(e) => updateItem(item.id, e.target.value)}
+              placeholder="Item name"
+              autoFocus={item.id.startsWith('new-')}
+              style={{
+                flex: 1,
+                border: '1px solid var(--border)',
+                borderRadius: 6,
+                padding: '7px 10px',
+                fontSize: 14,
+                background: 'var(--bg)',
+                color: 'var(--text)',
+              }}
+            />
+            <button
+              onClick={() => removeItem(item.id)}
+              style={{
+                background: 'none',
+                border: 'none',
+                color: 'var(--red)',
+                fontSize: 18,
+                cursor: 'pointer',
+                padding: '0 4px',
+                lineHeight: 1,
+                flexShrink: 0,
+              }}
+              aria-label="Remove item"
+            >
+              ×
+            </button>
+          </div>
+        ))}
+
+        <button
+          onClick={addItem}
+          style={{
+            background: 'none',
+            border: '1px dashed var(--border)',
+            borderRadius: 6,
+            color: 'var(--primary)',
+            fontSize: 14,
+            fontWeight: 500,
+            cursor: 'pointer',
+            padding: '8px 12px',
+            width: '100%',
+            marginTop: 4,
+          }}
+        >
+          + Add item
+        </button>
+      </div>
+
+      <div style={{ display: 'flex', gap: 10 }}>
+        <button
+          onClick={onClose}
+          disabled={saving}
+          style={{
+            flex: 1,
+            padding: 12,
+            background: 'var(--bg)',
+            border: '1px solid var(--border)',
+            borderRadius: 'var(--radius)',
+            fontSize: 15,
+            fontWeight: 600,
+            cursor: 'pointer',
+          }}
+        >
+          Cancel
+        </button>
+        <button
+          onClick={handleSave}
+          disabled={saving}
+          style={{
+            flex: 1,
+            padding: 12,
+            background: saving ? '#93c5fd' : 'var(--primary)',
+            color: 'white',
+            border: 'none',
+            borderRadius: 'var(--radius)',
+            fontSize: 15,
+            fontWeight: 600,
+            cursor: saving ? 'not-allowed' : 'pointer',
+          }}
+        >
+          {saving ? 'Saving…' : 'Save'}
+        </button>
+      </div>
+    </BottomSheet>
   );
 }
 
