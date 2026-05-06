@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import type { Walkthrough, WalkthroughItem } from '../types';
 import { api } from '../api';
@@ -23,6 +23,7 @@ export default function WalkthroughPage() {
   const [isSending, setIsSending] = useState(false);
   const [endStep, setEndStep] = useState<EndStep>(0);
   const [editableItems, setEditableItems] = useState<WalkthroughItem[]>([]);
+  const [deletedBaseItems, setDeletedBaseItems] = useState<WalkthroughItem[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [isEnding, setIsEnding] = useState(false);
   const [speechSupported, setSpeechSupported] = useState(true);
@@ -190,6 +191,7 @@ export default function WalkthroughPage() {
   };
 
   const handleGoBack = () => {
+    setDeletedBaseItems([]);
     setEndStep(0);
     startListening();
   };
@@ -197,6 +199,7 @@ export default function WalkthroughPage() {
   const handleContinue = () => {
     const items = walkthroughRef.current?.item_list ?? [];
     setEditableItems([...items]);
+    setDeletedBaseItems([]);
     setEndStep(2);
   };
 
@@ -206,7 +209,7 @@ export default function WalkthroughPage() {
     try {
       await api.endWalkthrough(walkthrough.id, {
         ...walkthrough,
-        item_list: editableItems,
+        item_list: [...editableItems, ...deletedBaseItems.map((i) => ({ ...i, status: 'unchecked' as const }))],
       });
       navigate(`/properties/${walkthrough.property_id}`, { replace: true });
     } catch (e) {
@@ -219,6 +222,16 @@ export default function WalkthroughPage() {
     setEditableItems((items) =>
       items.map((item) => (item.id === id ? { ...item, ...updates } : item))
     );
+  };
+
+  const deleteEditableItem = (id: string) => {
+    setEditableItems((items) => {
+      const item = items.find((i) => i.id === id);
+      if (item?.is_from_base) {
+        setDeletedBaseItems((prev) => [...prev, item]);
+      }
+      return items.filter((i) => i.id !== id);
+    });
   };
 
   const stopStream = () => {
@@ -694,54 +707,12 @@ export default function WalkthroughPage() {
               <p style={{ color: 'var(--text-secondary)', fontSize: 14 }}>No items.</p>
             )}
             {editableItems.map((item) => (
-              <div
+              <ReviewItemRow
                 key={item.id}
-                style={{
-                  paddingBottom: 12,
-                  marginBottom: 12,
-                  borderBottom: '1px solid var(--border)',
-                }}
-              >
-                <div
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 8,
-                    marginBottom: 6,
-                  }}
-                >
-                  <input
-                    type="checkbox"
-                    checked={item.status === 'checked'}
-                    onChange={(e) =>
-                      updateEditableItem(item.id, {
-                        status: e.target.checked ? 'checked' : 'unchecked',
-                      })
-                    }
-                    style={{ width: 16, height: 16, cursor: 'pointer', flexShrink: 0 }}
-                  />
-                  <input
-                    type="text"
-                    value={item.name}
-                    onChange={(e) => updateEditableItem(item.id, { name: e.target.value })}
-                    style={editInputStyle}
-                  />
-                  {item.is_from_base && (
-                    <span style={{ fontSize: 11, color: 'var(--text-secondary)', flexShrink: 0 }}>
-                      base
-                    </span>
-                  )}
-                </div>
-                <input
-                  type="text"
-                  value={item.notes ?? ''}
-                  placeholder="Notes / todo (optional)"
-                  onChange={(e) =>
-                    updateEditableItem(item.id, { notes: e.target.value || null })
-                  }
-                  style={{ ...editInputStyle, marginLeft: 24, color: 'var(--text-secondary)' }}
-                />
-              </div>
+                item={item}
+                onUpdate={(updates) => updateEditableItem(item.id, updates)}
+                onDelete={() => deleteEditableItem(item.id)}
+              />
             ))}
           </div>
 
@@ -772,6 +743,159 @@ export default function WalkthroughPage() {
           </button>
         </BottomSheet>
       )}
+    </div>
+  );
+}
+
+function ReviewItemRow({
+  item,
+  onUpdate,
+  onDelete,
+}: {
+  item: WalkthroughItem;
+  onUpdate: (updates: Partial<WalkthroughItem>) => void;
+  onDelete: () => void;
+}) {
+  const isTouchDevice = useMemo(
+    () => typeof window !== 'undefined' && ('ontouchstart' in window || navigator.maxTouchPoints > 0),
+    []
+  );
+  const [hovered, setHovered] = useState(false);
+  const [deleteHovered, setDeleteHovered] = useState(false);
+  const touchStartX = useRef<number>(0);
+  const touchCurrentX = useRef<number>(0);
+  const [dragOffset, setDragOffset] = useState(0);
+  const [isSwiped, setIsSwiped] = useState(false);
+
+  const handleTouchStart = (e: React.TouchEvent) => {
+    touchStartX.current = e.touches[0].clientX;
+    touchCurrentX.current = e.touches[0].clientX;
+  };
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    touchCurrentX.current = e.touches[0].clientX;
+    const diff = touchStartX.current - touchCurrentX.current;
+    if (diff > 0) {
+      setDragOffset(Math.min(diff, 80));
+    } else if (isSwiped) {
+      setDragOffset(Math.max(80 + diff, 0));
+    }
+  };
+
+  const handleTouchEnd = () => {
+    const diff = touchStartX.current - touchCurrentX.current;
+    if (diff > 40) {
+      setIsSwiped(true);
+      setDragOffset(80);
+    } else if (diff < -40 && isSwiped) {
+      setIsSwiped(false);
+      setDragOffset(0);
+    } else {
+      setDragOffset(isSwiped ? 80 : 0);
+    }
+  };
+
+  const offset = isSwiped ? 80 : dragOffset;
+
+  return (
+    <div
+      style={{
+        position: 'relative',
+        overflow: 'hidden',
+        marginBottom: 12,
+        borderBottom: '1px solid var(--border)',
+      }}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => { setHovered(false); setDeleteHovered(false); }}
+    >
+      {/* Touch: swipe-reveal delete button */}
+      {isTouchDevice && offset > 0 && (
+        <div
+          style={{
+            position: 'absolute',
+            right: 0,
+            top: 0,
+            bottom: 0,
+            display: 'flex',
+            alignItems: 'stretch',
+          }}
+        >
+          <button
+            onClick={onDelete}
+            style={{
+              width: 80,
+              border: 'none',
+              background: 'var(--red)',
+              color: 'white',
+              fontSize: 15,
+              fontWeight: 600,
+              cursor: 'pointer',
+            }}
+          >
+            Delete
+          </button>
+        </div>
+      )}
+
+      <div
+        style={{
+          transform: isTouchDevice ? `translateX(-${offset}px)` : 'none',
+          transition: dragOffset === 0 || dragOffset === 80 ? 'transform 0.2s' : 'none',
+          paddingBottom: 12,
+          background: 'var(--card)',
+        }}
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+          <input
+            type="checkbox"
+            checked={item.status === 'checked'}
+            onChange={(e) => onUpdate({ status: e.target.checked ? 'checked' : 'unchecked' })}
+            style={{ width: 16, height: 16, cursor: 'pointer', flexShrink: 0 }}
+          />
+          <input
+            type="text"
+            value={item.name}
+            onChange={(e) => onUpdate({ name: e.target.value })}
+            style={editInputStyle}
+          />
+          {item.is_from_base && (
+            <span style={{ fontSize: 11, color: 'var(--text-secondary)', flexShrink: 0 }}>
+              base
+            </span>
+          )}
+          {/* Desktop: delete button on hover */}
+          {!isTouchDevice && (
+            <button
+              onClick={onDelete}
+              onMouseEnter={() => setDeleteHovered(true)}
+              onMouseLeave={() => setDeleteHovered(false)}
+              style={{
+                flexShrink: 0,
+                border: 'none',
+                background: 'transparent',
+                color: deleteHovered ? 'var(--red)' : 'var(--text-secondary)',
+                fontSize: 13,
+                cursor: 'pointer',
+                padding: '2px 4px',
+                opacity: hovered ? 1 : 0,
+                transition: 'opacity 0.1s, color 0.1s',
+              }}
+            >
+              Delete
+            </button>
+          )}
+        </div>
+        <input
+          type="text"
+          value={item.notes ?? ''}
+          placeholder="Notes / todo (optional)"
+          onChange={(e) => onUpdate({ notes: e.target.value || null })}
+          style={{ ...editInputStyle, marginLeft: 24, color: 'var(--text-secondary)' }}
+        />
+      </div>
     </div>
   );
 }
