@@ -221,6 +221,10 @@ export default function WalkthroughPage() {
     );
   };
 
+  const deleteEditableItem = (id: string) => {
+    setEditableItems((items) => items.filter((item) => item.id !== id));
+  };
+
   const stopStream = () => {
     streamRef.current?.getTracks().forEach((t) => t.stop());
     streamRef.current = null;
@@ -694,54 +698,12 @@ export default function WalkthroughPage() {
               <p style={{ color: 'var(--text-secondary)', fontSize: 14 }}>No items.</p>
             )}
             {editableItems.map((item) => (
-              <div
+              <ReviewItemRow
                 key={item.id}
-                style={{
-                  paddingBottom: 12,
-                  marginBottom: 12,
-                  borderBottom: '1px solid var(--border)',
-                }}
-              >
-                <div
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 8,
-                    marginBottom: 6,
-                  }}
-                >
-                  <input
-                    type="checkbox"
-                    checked={item.status === 'checked'}
-                    onChange={(e) =>
-                      updateEditableItem(item.id, {
-                        status: e.target.checked ? 'checked' : 'unchecked',
-                      })
-                    }
-                    style={{ width: 16, height: 16, cursor: 'pointer', flexShrink: 0 }}
-                  />
-                  <input
-                    type="text"
-                    value={item.name}
-                    onChange={(e) => updateEditableItem(item.id, { name: e.target.value })}
-                    style={editInputStyle}
-                  />
-                  {item.is_from_base && (
-                    <span style={{ fontSize: 11, color: 'var(--text-secondary)', flexShrink: 0 }}>
-                      base
-                    </span>
-                  )}
-                </div>
-                <input
-                  type="text"
-                  value={item.notes ?? ''}
-                  placeholder="Notes / todo (optional)"
-                  onChange={(e) =>
-                    updateEditableItem(item.id, { notes: e.target.value || null })
-                  }
-                  style={{ ...editInputStyle, marginLeft: 24, color: 'var(--text-secondary)' }}
-                />
-              </div>
+                item={item}
+                onUpdate={(updates) => updateEditableItem(item.id, updates)}
+                onDelete={() => deleteEditableItem(item.id)}
+              />
             ))}
           </div>
 
@@ -772,6 +734,129 @@ export default function WalkthroughPage() {
           </button>
         </BottomSheet>
       )}
+    </div>
+  );
+}
+
+function ReviewItemRow({
+  item,
+  onUpdate,
+  onDelete,
+}: {
+  item: WalkthroughItem;
+  onUpdate: (updates: Partial<WalkthroughItem>) => void;
+  onDelete: () => void;
+}) {
+  const touchStartX = useRef<number>(0);
+  const touchCurrentX = useRef<number>(0);
+  const [dragOffset, setDragOffset] = useState(0);
+  const [isSwiped, setIsSwiped] = useState(false);
+
+  const handleTouchStart = (e: React.TouchEvent) => {
+    touchStartX.current = e.touches[0].clientX;
+    touchCurrentX.current = e.touches[0].clientX;
+  };
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    touchCurrentX.current = e.touches[0].clientX;
+    const diff = touchStartX.current - touchCurrentX.current;
+    if (diff > 0) {
+      setDragOffset(Math.min(diff, 80));
+    } else if (isSwiped) {
+      setDragOffset(Math.max(80 + diff, 0));
+    }
+  };
+
+  const handleTouchEnd = () => {
+    const diff = touchStartX.current - touchCurrentX.current;
+    if (diff > 40) {
+      setIsSwiped(true);
+      setDragOffset(80);
+    } else if (diff < -40 && isSwiped) {
+      setIsSwiped(false);
+      setDragOffset(0);
+    } else {
+      setDragOffset(isSwiped ? 80 : 0);
+    }
+  };
+
+  const offset = isSwiped ? 80 : dragOffset;
+
+  return (
+    <div
+      style={{
+        position: 'relative',
+        overflow: 'hidden',
+        marginBottom: 12,
+        borderBottom: '1px solid var(--border)',
+      }}
+    >
+      {offset > 0 && (
+        <div
+          style={{
+            position: 'absolute',
+            right: 0,
+            top: 0,
+            bottom: 0,
+            display: 'flex',
+            alignItems: 'stretch',
+          }}
+        >
+          <button
+            onClick={onDelete}
+            style={{
+              width: 80,
+              border: 'none',
+              background: 'var(--red)',
+              color: 'white',
+              fontSize: 15,
+              fontWeight: 600,
+              cursor: 'pointer',
+            }}
+          >
+            Delete
+          </button>
+        </div>
+      )}
+
+      <div
+        style={{
+          transform: `translateX(-${offset}px)`,
+          transition: dragOffset === 0 || dragOffset === 80 ? 'transform 0.2s' : 'none',
+          paddingBottom: 12,
+          background: 'var(--card)',
+        }}
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+          <input
+            type="checkbox"
+            checked={item.status === 'checked'}
+            onChange={(e) => onUpdate({ status: e.target.checked ? 'checked' : 'unchecked' })}
+            style={{ width: 16, height: 16, cursor: 'pointer', flexShrink: 0 }}
+          />
+          <input
+            type="text"
+            value={item.name}
+            onChange={(e) => onUpdate({ name: e.target.value })}
+            style={editInputStyle}
+          />
+          {item.is_from_base && (
+            <span style={{ fontSize: 11, color: 'var(--text-secondary)', flexShrink: 0 }}>
+              base
+            </span>
+          )}
+        </div>
+        <input
+          type="text"
+          value={item.notes ?? ''}
+          placeholder="Notes / todo (optional)"
+          onChange={(e) => onUpdate({ notes: e.target.value || null })}
+          style={{ ...editInputStyle, marginLeft: 24, color: 'var(--text-secondary)' }}
+        />
+      </div>
     </div>
   );
 }
