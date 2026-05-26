@@ -685,6 +685,9 @@ function TodoCard({
                 {propertyName && (
                   <span style={propertyPillStyle}>{propertyName}</span>
                 )}
+                {todo.location && (
+                  <span style={locationPillStyle}>{todo.location}</span>
+                )}
                 {tags.map((tag) => (
                   <span key={tag} style={{ ...tagPillStyle, ...tagColor(tag) }}>
                     {tag}
@@ -1063,6 +1066,16 @@ const propertyPillStyle: React.CSSProperties = {
   fontWeight: 500,
   color: 'var(--primary)',
   background: 'rgba(37, 99, 235, 0.1)',
+  padding: '2px 9px',
+  borderRadius: 14,
+  whiteSpace: 'nowrap',
+};
+
+const locationPillStyle: React.CSSProperties = {
+  fontSize: 13,
+  fontWeight: 500,
+  color: 'var(--text-secondary)',
+  background: 'var(--border)',
   padding: '2px 9px',
   borderRadius: 14,
   whiteSpace: 'nowrap',
