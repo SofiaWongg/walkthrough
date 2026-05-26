@@ -512,12 +512,13 @@ export default function WalkthroughPage() {
           <div style={{ padding: '12px 16px', color: 'var(--text-secondary)', fontSize: 14 }}>
             No items yet — they'll appear as you speak.
           </div>
-        ) : (
-          walkthrough.item_list.map((item) => (
+        ) : (() => {
+          const renderItem = (item: WalkthroughItem, indented: boolean) => (
             <div
               key={item.id}
               style={{
                 padding: '10px 16px',
+                paddingLeft: indented ? 32 : 16,
                 borderBottom: '1px solid var(--border)',
                 display: 'flex',
                 alignItems: 'flex-start',
@@ -560,8 +561,40 @@ export default function WalkthroughPage() {
                 )}
               </div>
             </div>
-          ))
-        )}
+          );
+
+          const noLocation = walkthrough.item_list.filter((i) => !i.location);
+          const byLocation = walkthrough.item_list.reduce<Record<string, typeof walkthrough.item_list>>((acc, item) => {
+            if (!item.location) return acc;
+            (acc[item.location] ??= []).push(item);
+            return acc;
+          }, {});
+
+          return (
+            <>
+              {noLocation.map((item) => renderItem(item, false))}
+              {Object.entries(byLocation).map(([location, items]) => (
+                <div key={location}>
+                  <div
+                    style={{
+                      padding: '6px 16px',
+                      fontSize: 11,
+                      fontWeight: 600,
+                      letterSpacing: '0.05em',
+                      textTransform: 'uppercase',
+                      color: 'var(--text-secondary)',
+                      background: 'var(--bg)',
+                      borderBottom: '1px solid var(--border)',
+                    }}
+                  >
+                    {location}
+                  </div>
+                  {items.map((item) => renderItem(item, true))}
+                </div>
+              ))}
+            </>
+          );
+        })()}
       </div>
 
       {/* Footer */}
