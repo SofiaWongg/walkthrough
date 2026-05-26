@@ -19,6 +19,7 @@ class TodoItem(BaseModel):
     image_urls: list[str] = []
     priority: Optional[TodoItemPriority] = None
     tags: list[str] = []
+    location: Optional[str] = None
     sort_order: int = 0
     created_at: datetime
     updated_at: datetime
@@ -29,6 +30,7 @@ class TodoItemCreate(BaseModel):
     property_id: Optional[str] = None
     walkthrough_item_id: Optional[str] = None
     priority: Optional[TodoItemPriority] = None
+    location: Optional[str] = None
 
 
 class TodoItemUpdate(BaseModel):
@@ -36,6 +38,7 @@ class TodoItemUpdate(BaseModel):
     is_completed: Optional[bool] = None
     priority: Optional[TodoItemPriority] = None
     tags: Optional[list[str]] = None
+    location: Optional[str] = None
 
 
 class BulkAddFromWalkthroughRequest(BaseModel):

@@ -116,6 +116,7 @@ def add_transcript_chunk(walkthrough_id: str, body: TranscriptChunk) -> Walkthro
                 "name": action_item["name"],
                 "status": WalkthroughItemStatus.checked,
                 "notes": action_item.get("todo"),
+                "location": action_item.get("location"),
                 "is_from_base": False,
             })
             existing_names.add(action_item["name"].lower())
@@ -300,6 +301,40 @@ Only include image IDs that were provided.""",
     return json.loads(response.choices[0].message.content)
 
 
+def _extract_locations(transcript_text: str, item_names: list[str]) -> dict[str, str | None]:
+    """For each item name, return the location mentioned near it in the transcript, or null."""
+    if not item_names:
+        return {}
+    client = _get_openai_client()
+    items_list = "\n".join(f"- {name}" for name in item_names)
+    response = client.chat.completions.create(
+        model=MODEL,
+        response_format={"type": "json_object"},
+        messages=[
+            {
+                "role": "system",
+                "content": (
+                    "You are a property inspector assistant. Given a transcript and a list of inspected items, "
+                    "identify the location (room, area, or zone) the inspector mentions for each item. "
+                    "Locations can be rooms (kitchen, bathroom, bedroom), areas (backyard, patio, garage), "
+                    "or floor levels (upstairs, downstairs, basement). "
+                    "If a location is not clearly stated for an item, return null for that item. "
+                    "Return a JSON object mapping each item name to its location or null.\n\n"
+                    "Example:\n"
+                    "Items: faucet, deck, lights\n"
+                    "Transcript: 'The kitchen faucet is dripping. The deck looks good. Upstairs lights need a new bulb.'\n"
+                    'Result: {"faucet": "kitchen", "deck": null, "lights": "upstairs"}'
+                ),
+            },
+            {
+                "role": "user",
+                "content": f"Items:\n{items_list}\n\nTranscript:\n{transcript_text}",
+            },
+        ],
+    )
+    return json.loads(response.choices[0].message.content)
+
+
 def _evaluate_transcript(transcript: list[TranscriptChunk], base_items: dict[str, str], image_notes: list[str]) -> dict:
     client = _get_openai_client()
 
@@ -311,8 +346,8 @@ def _evaluate_transcript(transcript: list[TranscriptChunk], base_items: dict[str
         checklist_section = f"Base checklist:\n{items_text}"
     else:
         checklist_section = "Base checklist: none"
-    
-    # Step 1: Extract items from transcript 
+
+    # Step 1: Extract items from transcript
     response = client.chat.completions.create(
         model=MODEL,
         response_format={"type": "json_object"},
@@ -360,6 +395,9 @@ def _evaluate_transcript(transcript: list[TranscriptChunk], base_items: dict[str
 
     transcript_items = json.loads(response.choices[0].message.content)
 
+    # Step 2b: extract locations for each item from the transcript
+    locations = _extract_locations(transcript_text, list(transcript_items.keys()))
+
     # Step 2: compare items to base and return structured result
     response = client.chat.completions.create(
         model=MODEL,
@@ -386,7 +424,11 @@ def _evaluate_transcript(transcript: list[TranscriptChunk], base_items: dict[str
             },
         ],
     )
-    return json.loads(response.choices[0].message.content)
+    result = json.loads(response.choices[0].message.content)
+    for action_item in result.get("action_items", []):
+        name = action_item["name"]
+        action_item["location"] = locations.get(name) or locations.get(name.lower())
+    return result
 
 
 @router.post("/{walkthrough_id}/validate_checklist", status_code=200)

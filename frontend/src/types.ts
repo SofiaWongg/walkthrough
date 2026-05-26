@@ -36,6 +36,7 @@ export interface WalkthroughItem {
   status: WalkthroughItemStatus;
   notes: string | null;
   is_from_base: boolean;
+  location: string | null;
 }
 
 export interface WalkthroughImage {
@@ -74,6 +75,7 @@ export interface TodoItem {
   image_urls: string[] | undefined;
   priority: number | null;
   tags: string[];
+  location: string | null;
   sort_order: number;
   created_at: string;
   updated_at: string;
