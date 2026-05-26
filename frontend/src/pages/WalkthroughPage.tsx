@@ -44,6 +44,8 @@ export default function WalkthroughPage() {
   const silenceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const recognitionRef = useRef<SpeechRecognition | null>(null);
   const isListeningRef = useRef(false);
+  const pendingVersionRef = useRef(0);
+  const lastFinalIndexRef = useRef(-1);
   const transcriptionRef = useRef<HTMLDivElement>(null);
   const isPinnedRef = useRef(true);
 
@@ -83,12 +85,16 @@ export default function WalkthroughPage() {
     }
     isSendingRef.current = true;
     setIsSending(true);
+    const version = pendingVersionRef.current;
     const promise = api
       .addTranscriptChunk(walkthroughRef.current.id, text.trim())
       .then((updated) => {
-        pendingTextRef.current = '';
-        currentTextRef.current = '';
-        setCurrentText('');
+        // Only clear pending text if no session restart has happened since this send began
+        if (pendingVersionRef.current === version) {
+          pendingTextRef.current = '';
+          currentTextRef.current = '';
+          setCurrentText('');
+        }
         setWalkthrough(updated);
         return updated;
       })
@@ -117,6 +123,8 @@ export default function WalkthroughPage() {
     // same instance after onend fires, causing 2-3x duplication. Always create a
     // fresh instance on each session restart to avoid this.
     const createAndStart = () => {
+      pendingVersionRef.current++;
+      lastFinalIndexRef.current = -1;
       const recognition = new SR() as SpeechRecognition;
       recognition.continuous = true;
       recognition.interimResults = true;
@@ -127,7 +135,12 @@ export default function WalkthroughPage() {
         for (let i = event.resultIndex; i < event.results.length; i++) {
           const result = event.results[i];
           if (result.isFinal) {
-            pendingTextRef.current += result[0].transcript + ' ';
+            // Guard against Android Chrome firing resultIndex=0 on every event,
+            // which would re-append already-finalized results.
+            if (i > lastFinalIndexRef.current) {
+              lastFinalIndexRef.current = i;
+              pendingTextRef.current += result[0].transcript + ' ';
+            }
           } else {
             interim += result[0].transcript;
           }
@@ -146,6 +159,16 @@ export default function WalkthroughPage() {
       recognition.onend = () => {
         if (isListeningRef.current && recognitionRef.current === recognition) {
           recognitionRef.current = null;
+          // Cancel pending silence timer; flush any unsent text before restarting.
+          // Android Chrome re-delivers recent final results on every new session,
+          // so we must start each session with a clean pendingTextRef to prevent x3+ duplication.
+          if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
+          silenceTimerRef.current = null;
+          const pending = pendingTextRef.current.trim();
+          if (pending && !isSendingRef.current) void doSendChunk(pending);
+          pendingTextRef.current = '';
+          currentTextRef.current = '';
+          setCurrentText('');
           createAndStart();
         }
       };
@@ -505,7 +528,12 @@ export default function WalkthroughPage() {
             zIndex: 1,
           }}
         >
-          Checklist ({walkthrough.item_list.length} items)
+          <div>Checklist ({walkthrough.item_list.length} items)</div>
+          {walkthrough.item_list.length > 0 && (
+            <div style={{ fontWeight: 400, fontSize: 12, color: 'var(--text-secondary)', marginTop: 2 }}>
+              Keep talking to add notes or details to any item.
+            </div>
+          )}
         </div>
 
         {walkthrough.item_list.length === 0 ? (
