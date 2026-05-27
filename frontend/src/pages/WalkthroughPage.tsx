@@ -214,6 +214,8 @@ export default function WalkthroughPage() {
   const handlePause = () => {
     stopListening();
     setIsPaused(true);
+    const remaining = currentTextRef.current.trim() || pendingTextRef.current.trim();
+    if (remaining) void doSendChunk(remaining);
   };
 
   const handleResume = () => {
