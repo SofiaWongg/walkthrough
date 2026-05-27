@@ -188,16 +188,11 @@ export default function WalkthroughPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [!!walkthrough]);
 
-  const handlePause = async () => {
+  const handlePause = () => {
     stopListening();
     setIsPaused(true);
-
-    await currentSendRef.current;
-
     const remaining = currentTextRef.current.trim() || pendingTextRef.current.trim();
-    if (remaining) {
-      await doSendChunk(remaining);
-    }
+    if (remaining) void doSendChunk(remaining);
   };
 
   const handleResume = () => {
